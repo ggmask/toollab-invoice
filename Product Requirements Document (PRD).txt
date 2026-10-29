@@ -1,0 +1,2181 @@
+Product Requirements Document (PRD)
+ToolLab Invoice
+Version: 1.0
+Document date: 29 October 2026
+Product type: Web-based invoicing and business management application
+Brand: ToolLab
+Proposed application name: ToolLab Invoice
+Proposed deployment: invoice.toollab.in
+Technology: PHP, MySQL, HTML, CSS, JavaScript
+Primary market: India
+Primary currency: INR (₹)
+Primary tax system: Indian GST
+Hosting environment: Hostinger shared hosting or a compatible PHP hosting environment
+Application model: Multi-user-ready, account-isolated SaaS architecture
+Design direction: Clean, minimal, professional, responsive, and fast
+1. Product Overview
+1.1 Product vision
+Build a lightweight invoicing and business management application that allows individuals, proprietors, small businesses, traders, freelancers, manufacturers, and service providers to manage their invoicing operations from a single dashboard.
+
+Users should be able to create professional invoices, prepare estimates, manage customers and products, record payments, automate recurring invoices, and export financial reports for accounting and GST filing.
+
+The application must use actual business logic rather than simply storing information in database tables.
+
+For example:
+- Recording a payment must automatically update the invoice's paid amount and outstanding balance.
+- Creating an invoice must calculate line-item discounts, taxable values, GST, and the final amount correctly.
+- Converting an accepted estimate into an invoice must preserve its line items and agreed prices.
+- Generating a recurring invoice must follow its schedule without creating duplicate invoices.
+- Deleting a customer must not destroy historical invoice records.
+- Exporting a GST report must use saved invoice data and the applicable tax classifications, not approximate calculations from the dashboard.
+The application should prioritize reliability, usability, data security, and accurate calculations over unnecessary features.
+1.2 Product objectives
+The primary objectives are:
+1. Provide a complete invoicing workflow for Indian businesses.
+2. Generate professional, printable invoice and estimate PDFs.
+3. Support GST and non-GST invoicing configurations.
+4. Maintain accurate customer, product, payment, and invoice records.
+5. Provide useful business and tax reports with Excel-compatible exports.
+6. Make the application comfortable to use on desktop, tablet, and mobile.
+7. Support installation as a Progressive Web App (PWA).
+8. Protect business and financial data using professional security practices.
+9. Keep the interface consistent with the existing ToolLab website.
+10. Make future expansion possible without requiring a complete rewrite.
+1.3 Target users
+User type	Primary needs
+Individual business owners	Create invoices and track outstanding payments
+Small retailers and traders	Manage products, customers, and sales
+Garment manufacturers and wholesalers	Invoice goods, apply GST, and track customer balances
+Freelancers	Create estimates, invoices, and payment receipts
+Service providers	Bill services, manage recurring invoices, and record payments
+Accountants	Export sales registers and tax-related reports
+Growing businesses	Manage multiple users and business records securely
+
+
+The initial product should focus on small businesses rather than enterprise-level ERP functionality.
+1.4 Product scope
+The application will include these primary modules:
+1. Home / Dashboard
+2. Invoices
+3. Estimates
+4. Recurring Invoices
+5. Customers
+6. Products and Services
+7. Payments
+8. Reports
+9. Settings
+Supporting functionality will include:
+- User registration and authentication
+- Google sign-in
+- Business profile and GST configuration
+- Invoice and estimate PDF generation
+- Excel-compatible report exports
+- Search, filtering, sorting, and pagination
+- Notifications and reminders
+- Audit logging
+- Data backup and recovery procedures
+- PWA installation support
+2. Product Principles
+The application must follow these principles throughout development.
+2.1 Simplicity first
+Show users the information they need to complete their work. Avoid unnecessary widgets, animations, excessive colors, complicated navigation, and decorative elements that do not improve usability.
+2.2 Real business logic
+Every financial operation must have a defined rule, validation process, and expected outcome.
+
+For example, a payment must be associated with an actual invoice or another explicitly supported receivable. A payment should never be recorded against an arbitrary customer balance without the relevant transaction details.
+2.3 Financial accuracy
+All monetary calculations must be performed on the server using decimal arithmetic or integer paise, with consistent rounding rules. JavaScript may provide previews, but the server must recalculate and validate every financial transaction.
+2.4 Historical accuracy
+Invoices that have been formally issued must retain their original financial details even when a customer changes their address or a product's price changes later.
+2.5 Security by default
+Users must only access business records they are authorized to access. Authentication alone is not sufficient. Every database operation must also enforce record ownership and permissions.
+2.6 Responsive by design
+The application must adapt to mobile, tablet, and desktop layouts without making important actions inaccessible or forcing users to interact with oversized tables on small screens.
+2.7 Maintainable architecture
+Business calculations, database access, authentication, PDF generation, and interface rendering must be separated into logical components.
+
+No major business rule should depend on duplicated logic scattered throughout multiple pages.
+3. Technology Stack and Architecture
+3.1 Required technology
+Layer	Technology	Purpose
+Backend	PHP 8.3+ or a currently supported PHP version compatible with the host	Business logic and APIs
+Database	MySQL 8.0+ or a compatible supported version	Persistent business data
+Database access	PDO	Prepared statements and controlled database access
+Frontend	HTML5, CSS3, JavaScript	Application interface
+Styling	Reusable CSS design system	Consistent interface
+Icons	A lightweight icon library	Consistent interface icons
+Authentication	PHP sessions and Google OAuth 2.0 / OpenID Connect	Secure sign-in
+PDF generation	Dompdf or another maintained PHP PDF library	Invoice and estimate PDFs
+Excel export	PhpSpreadsheet	XLSX spreadsheet generation
+Email	SMTP through a configurable mail provider	Invoice delivery and notifications
+PWA	Web app manifest and service worker	Installable application experience
+Web server	Apache or compatible hosting server	Application delivery
+Source control	Git and GitHub	Version control and deployment
+
+
+Important: These are proposed minimums, not a requirement to install the newest version of every dependency regardless of hosting compatibility. Before implementation, verify the PHP version, MySQL version, required PHP extensions, memory limits, and Composer support on the target hosting plan.
+
+Use Composer to manage maintained PHP dependencies where supported. Lock dependency versions in composer.lock.
+3.2 Application architecture
+Use a modular, server-rendered PHP application with a clear separation between presentation, business logic, and persistence.
+
+A suitable request flow is:
+
+Browser → PHP route/controller → Authentication and authorization → Validation → Business service → Repository/PDO → MySQL → Response
+
+PDF and Excel generation should use the same validated business services and database records as the normal application.
+
+The frontend must never be the source of truth for invoice totals, payment balances, permissions, or document numbering.
+Architectural requirements
+- Use a single application bootstrap for configuration and shared services.
+- Separate public routes from authenticated routes.
+- Separate controllers, services, repositories, and templates.
+- Use database transactions for financial operations involving multiple database changes.
+- Enforce business ownership at the query and service layers.
+- Centralize financial calculation rules.
+- Use reusable UI components and templates.
+- Avoid duplicating the same calculation in PDF templates, reports, and invoice forms.
+- Keep secrets and database credentials outside publicly accessible directories.
+- Do not require Node.js at runtime.
+- Do not introduce microservices unless a demonstrated requirement justifies them.
+3.3 Multi-tenant architecture
+The application should be designed for multiple independent business accounts from the beginning, even if the first release has relatively few users.
+
+A user may own or belong to a business workspace. Each workspace contains its own customers, products, invoices, estimates, recurring schedules, payments, and reports.
+
+Every business-owned table must include a business_id or have an explicit, secure relationship to a business-owned parent record.
+
+For example:
+- Business A must never retrieve Business B's invoices.
+- A user must not access another business's customer by modifying a URL ID.
+- Exporting a report must apply the same business scope as viewing the report.
+- PDF downloads must verify that the requested invoice belongs to an authorized business.
+Use a centralized authorization service and ownership checks for every relevant operation.
+
+Initial scope: One business workspace per registered user is a reasonable starting point. The schema should allow a future user to belong to multiple workspaces without redesigning the whole system.
+4. User Accounts and Authentication
+4.1 Registration
+The registration page must include:
+- Full name
+- Email address
+- Password
+- Confirm password
+- Terms and privacy notice acknowledgement, where applicable
+- Create account button
+- Sign in link
+- Continue with Google button
+Registration rules
+1. Validate all fields on the server.
+2. Normalize email addresses consistently.
+3. Enforce a unique database constraint for the normalized email.
+4. Require an appropriately strong password.
+5. Store passwords using PHP's password_hash().
+6. Never store plaintext passwords or reversible password encryption.
+7. Prevent duplicate account creation.
+8. Rate-limit registration attempts.
+9. Provide a secure email verification workflow.
+10. Create the initial business workspace only after successful account creation, according to the chosen verification workflow.
+Use password_verify() for password authentication and password_needs_rehash() when appropriate.
+
+Reference: PHP password hashing documentation
+4.2 Login
+The login page must support:
+- Email and password
+- Continue with Google
+- Forgot password
+- Remember-me behavior, if implemented securely
+- Sign out
+Security requirements
+- Use HTTPS throughout the application.
+- Regenerate the PHP session ID after successful authentication.
+- Use Secure, HttpOnly, and appropriate SameSite session cookies.
+- Set session inactivity and absolute lifetime policies.
+- Rate-limit failed login attempts.
+- Return generic authentication errors that do not reveal whether an email exists.
+- Invalidate the server-side session on logout.
+- Protect state-changing requests against CSRF.
+- Do not store session tokens in browser local storage.
+- Do not implement permanent login by keeping a session ID alive indefinitely.
+PHP's official documentation describes session management and related security considerations. PHP session security documentation
+4.3 Google sign-in
+Implement Google sign-in using Google's supported OAuth 2.0 / OpenID Connect flow.
+
+Requirements:
+1. Register the application in Google Cloud.
+2. Configure authorized redirect URIs.
+3. Use the official Google identity flow or a maintained server-side OAuth library.
+4. Validate the authorization response, state, issuer, audience, signature, and expiration as appropriate to the selected flow.
+5. Use a unique, verified Google account identifier as the external identity key.
+6. Do not use an unverified email claim to establish account ownership.
+7. Associate a Google identity with an existing account only through a verified, secure account-linking workflow.
+8. Do not automatically merge accounts merely because their displayed email addresses match.
+9. Keep client secrets outside the public web directory.
+10. Provide a clear error message if Google authentication fails.
+A user who signs in through Google should have access to the same application features as a user who signs in with an email and password.
+4.4 Password recovery
+The password reset workflow must:
+- Allow a user to request a reset using their email.
+- Always show a generic confirmation message.
+- Generate a cryptographically secure, single-use reset token.
+- Store only a hash of the token.
+- Give the token a short expiration period.
+- Invalidate the token after successful use.
+- Rate-limit reset requests.
+- Invalidate existing sessions or provide a clear session-revocation policy after a password reset.
+4.5 Account settings
+Users must be able to:
+- Update their name.
+- Change their email through a verification workflow.
+- Change their password.
+- Connect or disconnect Google sign-in when safe to do so.
+- View active sessions where supported.
+- Sign out of other sessions.
+- Request account deletion.
+Account deletion must not silently destroy legally important issued invoice records. Provide an appropriate data-retention and export workflow before deleting or anonymizing data, subject to applicable law.
+5. Application Navigation and Layout
+5.1 Main navigation
+The authenticated application should have the following navigation structure:
+Menu	Purpose
+Home	Business overview and quick actions
+Invoices	Create and manage sales invoices
+Estimates	Prepare and manage quotations
+Recurring Invoices	Configure automatically scheduled invoices
+Customers	Manage customer information
+Products & Services	Maintain the product and service catalog
+Payments	Record receipts and track payment allocations
+Reports	Analyze sales, collections, tax, and outstanding balances
+Settings	Manage business, tax, document, and account configuration
+
+
+Desktop layout
+Use a compact left sidebar with:
+- ToolLab Invoice branding
+- Navigation links
+- Active-page indicator
+- Business profile or workspace selector
+- User profile and account menu
+The main content area should include:
+- Page title
+- Short contextual description where useful
+- Primary action button
+- Optional secondary actions
+- Page content
+The sidebar may be collapsible, but its expanded state must remain easy to navigate.
+Mobile layout
+On mobile:
+- Use a compact header with the application name and profile control.
+- Provide a compact navigation drawer or another consistent mobile navigation pattern.
+- Keep the primary action accessible.
+- Replace wide tables with responsive cards or carefully designed horizontal scrolling.
+- Use full-width form fields when appropriate.
+- Ensure dialogs fit the screen and do not trap users behind inaccessible controls.
+- Avoid fixed elements that obscure form buttons or content.
+Do not create a separate mobile application codebase. Use one responsive application with adaptive layouts.
+6. Module 1: Home Dashboard
+6.1 Purpose
+Provide an immediate overview of the business's invoicing activity, collections, and outstanding balances.
+
+The dashboard should answer four questions:
+1. How much has the business invoiced?
+2. How much has it collected?
+3. How much remains outstanding?
+4. Which invoices or estimates require attention?
+6.2 Dashboard components
+Summary cards
+Display a compact selection of:
+- Total invoiced during the selected period
+- Payments received during the selected period
+- Outstanding receivables as of the selected date
+- Overdue invoice amount
+- Number of unpaid or partially paid invoices
+Allow the user to choose a date range, with sensible defaults such as the current month.
+
+Clearly distinguish amounts invoiced during a period from payments received during that period and outstanding amounts at a point in time.
+
+Do not treat invoice totals as cash received.
+Recent invoices
+Display:
+- Invoice number
+- Customer
+- Issue date
+- Due date
+- Invoice amount
+- Amount paid
+- Outstanding balance
+- Status
+Provide a link to view each invoice.
+Outstanding payments
+Show overdue and approaching-due invoices, sorted by due date or outstanding amount.
+Quick actions
+Provide shortcuts for:
+- Create invoice
+- Create estimate
+- Add customer
+- Add product or service
+- Record payment
+Business activity
+Optionally show a compact activity feed for recent invoice creation, payment recording, estimate acceptance, and other important events.
+6.3 Dashboard calculations
+All dashboard figures must use the selected business workspace and date filters.
+
+For example:
+
+Outstanding balance = Amount due on issued invoices − Payments allocated to those invoices − Valid credit adjustments
+
+The actual calculation must respect the application's document and adjustment model.
+
+Voided invoices, draft documents, and deleted or reversed payment records must not be treated as normal issued sales or valid collections.
+
+Dashboard cards must link to the corresponding filtered report or record list.
+7. Module 2: Invoices
+The invoice module is the central component of the application.
+
+It must support the complete lifecycle from drafting through issuance, payment collection, and closure.
+7.1 Invoice listing page
+Display a searchable and filterable invoice table.
+Columns
+- Invoice number
+- Customer
+- Issue date
+- Due date
+- Total amount
+- Paid amount
+- Balance due
+- Status
+- Actions
+Filters
+- Invoice status
+- Customer
+- Issue date range
+- Due date range
+- Financial year
+- Payment status
+- GST or non-GST document type, where applicable
+Actions
+- Create invoice
+- View invoice
+- Edit draft
+- Duplicate invoice into a new draft
+- Download PDF
+- Print
+- Record payment
+- Send invoice by email
+- View payment history
+- Void an eligible invoice
+Use pagination for large datasets and ensure that filtering and pagination are performed on the server.
+7.2 Invoice creation form
+The form should be divided into clear sections rather than presenting every field in one overwhelming interface.
+Section A: Document details
+Fields:
+- Document type
+- Invoice number, generated by the system
+- Invoice date
+- Due date
+- Customer
+- Purchase order number, optional
+- Payment terms
+- Currency
+- Place of supply, where applicable
+The invoice number should be assigned according to the configured numbering policy.
+
+For issued invoices, numbering must be controlled by the server and protected against duplicates during concurrent requests.
+Section B: Supplier information
+Populate the supplier details from the active business profile.
+
+Fields may include:
+- Legal business name
+- Trade name
+- Business address
+- State and state code
+- PIN code
+- GSTIN
+- Contact number
+- Business email
+- Logo
+Supplier details used on an issued invoice must be preserved as a snapshot.
+
+If the business later changes its address, an existing invoice should continue displaying the original details recorded when it was issued.
+Section C: Customer information
+Select an existing customer or create a new one without losing the current invoice draft.
+
+Display or capture:
+- Customer name
+- Billing address
+- Shipping address
+- State and state code
+- PIN code
+- GST registration status
+- GSTIN, where applicable
+- Email address
+- Phone number
+The invoice must retain a snapshot of the relevant customer details at issuance.
+Section D: Line items
+Each invoice must support multiple product or service rows.
+
+Fields per row:
+- Product or service
+- Description
+- HSN/SAC code
+- Quantity
+- Unit
+- Unit price
+- Discount type
+- Discount value
+- Taxable value
+- GST rate
+- Tax amount
+- Line total
+The user should be able to:
+- Add a line
+- Remove a draft line
+- Reorder lines
+- Edit the description
+- Select a product from the catalog
+- Add a custom line item
+- Apply an item-level discount
+- Enter a quantity with appropriate precision
+- Set the applicable tax treatment
+Selecting a product should populate its default description, unit, price, and tax configuration. The user must still be able to override permitted invoice-specific values.
+
+Changes to the catalog must not change previously issued invoices.
+Section E: Discounts and additional charges
+Support:
+- Line-level discount
+- Invoice-level discount
+- Shipping charges
+- Packaging charges
+- Other configured charges
+Each charge must have an explicit tax treatment.
+
+The system must calculate whether a discount applies before tax and whether additional charges are taxable based on the configured treatment and applicable rules.
+
+Do not automatically apply GST to every charge without considering its tax classification.
+Section F: GST configuration
+Support:
+- Taxable supply
+- Exempt supply
+- Nil-rated supply
+- Non-GST supply
+- Applicable tax rates
+- Intra-state supply
+- Inter-state supply
+- Reverse-charge indicator, where applicable
+- Place of supply
+- HSN/SAC
+- CGST, SGST, UTGST, or IGST presentation, as applicable
+The user must configure the supplier's GST registration and applicable business tax settings.
+
+For a standard taxable domestic supply, the system should generally determine the tax presentation using the supplier's state and the applicable place-of-supply information.
+
+However, the application must not assume that the customer's state alone determines every tax outcome. Place-of-supply rules, special transaction types, exemptions, reverse-charge situations, and other applicable provisions may require different treatment.
+
+If the required information is missing or the tax treatment is ambiguous, display a validation warning and require the user to resolve it before issuing the document.
+Section G: Notes and terms
+Include:
+- Customer-facing notes
+- Payment instructions
+- Terms and conditions
+- Bank details, if configured
+- Authorized signature area, if required
+Internal notes must never appear on customer-facing PDFs unless explicitly selected.
+Section H: Totals
+Display a live preview of:
+- Gross line-item value
+- Item discounts
+- Invoice-level discount
+- Taxable value
+- CGST
+- SGST/UTGST
+- IGST
+- Other applicable taxes or cess
+- Additional charges
+- Rounding adjustment, if permitted
+- Final invoice total
+- Amount already paid
+- Balance due
+The server must independently calculate and validate the final values before saving or issuing the invoice.
+7.3 Invoice lifecycle
+Recommended statuses:
+Status	Meaning
+Draft	Work in progress, not formally issued
+Issued	Officially issued to the customer
+Partially Paid	Some amount has been received
+Paid	The outstanding balance has been settled
+Overdue	The invoice has an outstanding balance after its due date
+Void	An issued document has been formally voided under the application's controlled process
+
+
+The overdue state can be derived from the due date and outstanding balance rather than permanently stored as the only source of truth.
+Important rules
+- Draft invoices may be edited or deleted by an authorized user.
+- Issued invoices must not be silently rewritten or deleted.
+- An issued invoice with an incorrect value should be corrected through an appropriate documented adjustment process.
+- Voiding an invoice must require confirmation and a reason.
+- A voided invoice must remain available for audit and historical reference.
+- Issuing an invoice must record its issue timestamp and the user who issued it.
+- A duplicate action must create a new draft with a new invoice number assigned according to the numbering policy.
+- Invoice numbering must remain unique within the configured business and financial year.
+Legal and accounting consideration: The application must distinguish between a draft, an issued invoice, a voided document, and a legally appropriate credit or debit note. It must not treat a database deletion as a valid substitute for an accounting adjustment.
+7.4 Invoice PDF generation
+Every eligible invoice must have a PDF generation feature.
+
+The PDF should include:
+- Business logo
+- Supplier name and address
+- GSTIN, where applicable
+- Invoice number and date
+- Due date
+- Customer information
+- Billing and shipping addresses, as applicable
+- Product or service descriptions
+- HSN/SAC information
+- Quantities and units
+- Unit prices
+- Discounts
+- Taxable values
+- GST breakdown
+- Total amount
+- Amount in words, where supported
+- Payment details
+- Notes and terms
+- Authorized signature area, where appropriate
+- Applicable document designation
+The PDF should have a professional A4 layout by default.
+
+Long invoices must paginate correctly. Table headers should repeat where supported, and totals should not overlap line items or footers.
+PDF behavior
+- Generate PDFs from server-validated, saved invoice records.
+- Escape all customer and product content before rendering HTML.
+- Prevent untrusted content from loading arbitrary remote resources.
+- Restrict access to the requested business's documents.
+- Use stable filenames, such as INV-2026-0001.pdf, without exposing internal database IDs.
+- Allow download and printing.
+- Keep issued document snapshots unchanged when the underlying catalog or customer profile changes.
+If PDF generation fails, show a useful error and retain the invoice. A PDF failure must not cause a second invoice to be issued.
+8. Module 3: Estimates
+8.1 Purpose
+Allow businesses to send quotations to customers before issuing invoices.
+
+Estimates should reuse the invoice calculation engine where possible, while maintaining a separate document lifecycle.
+8.2 Estimate listing
+Display:
+- Estimate number
+- Customer
+- Estimate date
+- Valid until
+- Total amount
+- Status
+- Actions
+Filters should include status, customer, date range, and expiration.
+8.3 Estimate creation
+The estimate form should support:
+- Customer selection
+- Estimate date
+- Valid-until date
+- Line items
+- Quantity and unit price
+- Discounts
+- GST preview, where appropriate
+- Notes and terms
+- PDF generation
+Estimate numbers must use a separate numbering series from invoices.
+8.4 Estimate statuses
+- Draft
+- Sent
+- Accepted
+- Rejected
+- Expired
+- Converted to Invoice
+The application must preserve the history of important status changes.
+
+An expired estimate should not automatically become an invoice.
+8.5 Convert estimate to invoice
+Provide a Convert to Invoice action for eligible estimates.
+
+Conversion must:
+1. Verify that the estimate belongs to the current business.
+2. Verify that the estimate is eligible for conversion.
+3. Create a new invoice draft using the estimate's saved customer and line-item details.
+4. Preserve agreed quantities, prices, and discounts.
+5. Revalidate tax treatment against the required issuance rules.
+6. Assign an invoice number according to the invoice numbering policy.
+7. Store a relationship between the original estimate and the new invoice.
+8. Prevent accidental duplicate conversion.
+9. Allow an authorized user to review and issue the resulting invoice.
+Conversion should not automatically mark an invoice as paid or issue it without the appropriate action.
+9. Module 4: Recurring Invoices
+9.1 Purpose
+Automate invoicing for recurring business arrangements such as monthly services, subscriptions, retainers, and regular supplies.
+9.2 Recurring invoice configuration
+Fields:
+- Recurring profile name
+- Customer
+- Line items
+- Price and tax settings
+- Frequency
+- Start date
+- End date, optional
+- Next scheduled date
+- Invoice due-date rule
+- Automatic or manual generation mode
+- Email delivery preference
+- Active, paused, or completed state
+Supported frequencies:
+- Weekly
+- Every two weeks
+- Monthly
+- Quarterly
+- Half-yearly
+- Yearly
+Allow a configurable custom interval if it can be implemented reliably.
+9.3 Generation logic
+The recurring engine must:
+1. Identify active recurring profiles whose next run is due.
+2. Acquire a safe processing lock or use another concurrency-safe method.
+3. Check whether an invoice has already been generated for the scheduled occurrence.
+4. Create the invoice in a database transaction.
+5. Store the scheduled occurrence and resulting invoice relationship.
+6. Update the next scheduled date only after successful processing.
+7. Record failures and retry them according to a defined policy.
+8. Avoid duplicate invoice creation when a scheduled task runs more than once.
+Use a database uniqueness constraint or equivalent idempotency mechanism for each recurring profile and scheduled occurrence.
+Shared-hosting implementation
+If the host supports cron jobs, use a scheduled PHP CLI task or a protected web-triggered task with strong authentication and locking.
+
+Do not assume a continuously running worker is available on shared hosting.
+
+If automatic scheduling cannot be configured reliably, the application must show the next scheduled run and provide a manual generation action.
+9.4 Important tax rule
+Recurring invoice generation must not blindly reuse historical tax settings if relevant tax information has changed.
+
+Each generated invoice must preserve the applicable document details and validate the configured tax treatment before issuance.
+
+Provide a manual-review mode for businesses that need to approve invoices before they are formally issued or emailed.
+10. Module 5: Customers
+10.1 Customer listing
+Display:
+- Customer name
+- Customer type
+- GST registration status
+- GSTIN, if applicable
+- Email
+- Phone
+- Total invoiced
+- Total outstanding
+- Status
+Support searching, sorting, filtering, and pagination.
+10.2 Add and edit customer
+Fields:
+Basic information
+- Customer or business name
+- Contact person
+- Customer type
+- Email
+- Phone
+- Alternate phone, optional
+Tax information
+- GST registration status
+- GSTIN, where applicable
+- State
+- State code
+- PAN, only if required for a supported workflow
+- Customer tax notes, optional
+Address
+- Billing address
+- Shipping address
+- City
+- State
+- PIN code
+- Country
+Additional information
+- Payment terms
+- Notes
+- Active or archived status
+Validate GSTIN format and other structured identifiers where possible, but do not claim that a format check proves that a GST registration is active.
+10.3 Customer detail page
+The customer detail page should include:
+- Contact information
+- Billing and shipping addresses
+- Invoice history
+- Estimate history
+- Payment history
+- Total invoiced
+- Total paid
+- Outstanding balance
+Display customer balances using the same accounting rules as the dashboard and reports.
+10.4 Customer deletion
+Do not permanently delete a customer who has issued invoices, recorded payments, or other financially significant transactions.
+
+Instead:
+- Allow deletion of unused customers when permitted.
+- Archive customers with transaction history.
+- Preserve customer snapshots on historical documents.
+- Allow archived customers to remain available for historical reporting.
+- Prevent archived customers from being selected for new documents unless the user explicitly reactivates them.
+11. Module 6: Products and Services
+11.1 Purpose
+Maintain a reusable catalog of products and services to speed up invoice creation and standardize descriptions and tax settings.
+11.2 Product listing
+Display:
+- Product or service name
+- SKU
+- HSN/SAC
+- Unit
+- Selling price
+- Default tax rate
+- Active status
+Support searching, filtering, sorting, and pagination.
+11.3 Product creation
+Fields:
+- Product or service name
+- SKU or internal code
+- Description
+- Item type: goods or services
+- Unit of measurement
+- Default selling price
+- HSN/SAC code
+- GST rate
+- Tax category
+- Active or archived status
+Optionally support a default discount or internal notes.
+11.4 Product behavior
+- SKU should be unique within a business when provided.
+- Product prices must be stored using an appropriate decimal representation.
+- Selecting a product should populate invoice defaults.
+- Users should be able to customize permitted fields on individual documents.
+- Editing a product must not rewrite historical invoices.
+- Archived products must remain visible in historical records.
+- Catalog tax settings should be defaults, not unquestioned proof of the correct tax treatment for every transaction.
+11.5 Inventory scope
+The first release is an invoicing application, not a full inventory management system.
+
+Therefore:
+- Product quantity on an invoice is not automatically stock on hand.
+- Issuing an invoice must not imply that inventory has been deducted unless a proper stock module is implemented.
+- Purchasing, stock valuation, warehouse management, and inventory reconciliation are outside the initial scope.
+12. Module 7: Payments
+12.1 Purpose
+The Payments module must track money received from customers and allocate receipts to the relevant invoices.
+
+It must distinguish between money received, money allocated to invoices, and amounts that remain outstanding.
+12.2 Payment listing
+Display:
+- Payment reference
+- Receipt date
+- Customer
+- Payment method
+- Amount received
+- Allocated amount
+- Unallocated amount
+- Reference or transaction number
+- Status
+- Actions
+Filters:
+- Date range
+- Customer
+- Payment method
+- Payment status
+- Invoice number
+12.3 Record a payment
+Fields:
+- Customer
+- Receipt date
+- Amount received
+- Payment method
+- Transaction reference
+- Bank or account details, optional
+- Internal notes
+- Invoice allocation
+Supported payment methods:
+- Cash
+- Bank transfer
+- UPI
+- Cheque
+- Debit card
+- Credit card
+- Other
+The application should allow one receipt to be allocated across multiple invoices belonging to the same customer.
+
+It should also allow multiple partial payments against a single invoice.
+Example
+Suppose a customer receives an invoice for ₹25,000.
+Transaction	Amount
+Invoice total	₹25,000
+First payment	₹10,000
+Second payment	₹5,000
+Total allocated payments	₹15,000
+Outstanding balance	₹10,000
+
+
+After the first payment, the invoice becomes partially paid. After the second, it remains partially paid.
+
+The status becomes Paid only when the valid outstanding balance reaches zero under the application's rounding rules.
+12.4 Payment validation
+The system must:
+1. Verify that the customer belongs to the current business.
+2. Verify that each allocated invoice belongs to the same business and customer.
+3. Prevent allocation beyond the available unallocated receipt amount.
+4. Prevent allocation beyond an invoice's outstanding balance, unless a separately defined credit or overpayment workflow permits it.
+5. Prevent invalid negative payments.
+6. Validate payment dates and monetary precision.
+7. Record the user and timestamp for each transaction.
+8. Use a database transaction when recording the receipt and its allocations.
+9. Recalculate invoice balances using saved transaction data.
+10. Prevent duplicate submissions from creating duplicate receipts.
+Do not store the invoice's paid amount as an independently editable field. Calculate it from valid payment allocations, or maintain a carefully controlled derived balance that can be reconciled against those allocations.
+12.5 Payment editing and deletion
+Financial records need controlled correction workflows.
+- Draft or unconfirmed receipts may be edited.
+- Posted receipts must not be silently deleted.
+- Incorrect posted receipts should be reversed through a documented operation.
+- Reversals must retain the original receipt and reason for reversal.
+- Reversal must remove the effect of the original allocation without erasing history.
+- Reports must exclude reversed receipts from valid collections.
+- Editing a posted receipt must preserve an audit trail.
+12.6 Payment receipts
+Provide a printable payment receipt containing:
+- Business information
+- Receipt number
+- Receipt date
+- Customer information
+- Amount received
+- Payment method
+- Transaction reference, where appropriate
+- Related invoice numbers
+- Allocations
+- Remaining balance, if applicable
+The receipt must not claim that an invoice is fully settled when only part of its amount has been paid.
+13. Module 8: Reports and Excel Exports
+13.1 Purpose
+Provide reliable financial summaries and transaction-level reports that business owners and accountants can use for bookkeeping, reconciliation, and tax preparation.
+
+The application must support both on-screen viewing and file exports.
+13.2 Report categories
+A. Sales report
+Display:
+- Invoice number
+- Invoice date
+- Customer
+- Taxable value
+- CGST
+- SGST
+- IGST
+- Other applicable taxes
+- Total invoice value
+- Paid amount
+- Outstanding balance
+- Invoice status
+Filters:
+- Date range
+- Financial year
+- Customer
+- Invoice status
+- Tax category
+B. GST sales register
+Provide a transaction-level sales register with fields such as:
+- Invoice number
+- Invoice date
+- Customer name
+- Customer GSTIN, where applicable
+- Customer registration category
+- Place of supply
+- Reverse-charge indicator
+- HSN/SAC
+- Taxable value
+- Applicable tax rate
+- CGST
+- SGST/UTGST
+- IGST
+- Cess, where applicable
+- Invoice value
+- Document type and status
+The report should distinguish taxable, exempt, nil-rated, and other relevant supply categories.
+C. Payment and collection report
+Display:
+- Receipt number
+- Receipt date
+- Customer
+- Payment method
+- Transaction reference
+- Amount received
+- Amount allocated
+- Unallocated amount
+- Reversal status
+D. Outstanding receivables
+Show:
+- Customer
+- Invoice number
+- Invoice date
+- Due date
+- Invoice amount
+- Paid amount
+- Balance due
+- Days overdue
+Provide ageing buckets, for example:
+- Not yet due
+- 1–30 days overdue
+- 31–60 days overdue
+- 61–90 days overdue
+- More than 90 days overdue
+The ageing report must use the selected as-of date, rather than always assuming today's date.
+E. Customer statement
+Provide a chronological statement containing:
+- Opening balance, where supported by the accounting model
+- Issued invoices
+- Allocated receipts
+- Valid credit adjustments
+- Reversed transactions
+- Closing balance
+A customer statement must not treat an estimate as an issued sale.
+F. Estimate report
+Display:
+- Estimate number
+- Customer
+- Date
+- Valid-until date
+- Estimate value
+- Status
+- Conversion status
+G. Recurring invoice report
+Display:
+- Recurring profile
+- Customer
+- Frequency
+- Last generated invoice
+- Next scheduled date
+- Generation status
+- Last error, where applicable
+H. Tax summary
+Provide totals grouped by tax period, tax rate, and relevant supply classification.
+
+Where appropriate, include:
+- Taxable turnover
+- Exempt or nil-rated turnover
+- Taxable value by rate
+- CGST
+- SGST/UTGST
+- IGST
+- Cess
+- Document counts
+- Credit and debit adjustments, when supported
+These totals should be derived from the underlying transactions and applicable document rules.
+13.3 Excel export
+Provide XLSX exports for all major reports.
+
+Use a maintained library such as PhpSpreadsheet to generate Excel files.
+Export behavior
+Each export must:
+1. Apply the same filters as the on-screen report.
+2. Include a report title and generation date.
+3. Include the selected date range and business identity.
+4. Use clear column headers.
+5. Preserve invoice numbers, GSTINs, and other identifiers as text where appropriate.
+6. Use numeric cells for amounts so that users can calculate totals in Excel.
+7. Apply consistent decimal precision.
+8. Include a summary sheet when it provides value.
+9. Use meaningful filenames.
+10. Verify the user's business permissions before generating the file.
+Example filenames:
+- sales-register-FY-2026-27.xlsx
+- gst-summary-2026-10.xlsx
+- outstanding-receivables-2026-10-29.xlsx
+- payment-report-2026-10.xlsx
+13.4 GST filing compatibility
+The reports should be designed to help accountants prepare and reconcile GST returns.
+
+However, a generic Excel export is not automatically a GST portal-ready filing file.
+
+The application must not claim that every report is ready for direct upload into GSTR-1 or another GST return without implementing and validating the required schema, classification rules, and current portal specifications.
+
+The first release should provide an accurate sales register and tax summary. Dedicated GST return preparation and upload-compatible exports can be introduced after their requirements are verified.
+
+The application's tax fields should follow applicable Indian GST invoice requirements, including relevant particulars under Rule 46 of the CGST Rules. See the official CBIC GST invoice rules.
+13.5 Spreadsheet security
+When generating exports:
+- Neutralize untrusted text that could be interpreted as a spreadsheet formula.
+- Never concatenate user-controlled values into formulas without validation.
+- Do not include internal notes or personal information unless the report requires them.
+- Avoid exposing database IDs or internal implementation details unnecessarily.
+- Set appropriate download headers.
+- Prevent unauthorized downloads.
+- Limit export size and execution time to protect shared-hosting resources.
+14. Module 9: Settings
+The Settings module must provide a central place for configuring the business and application.
+
+Use separate settings sections to keep the interface manageable.
+14.1 Business profile
+Fields:
+- Legal business name
+- Trade name
+- Business logo
+- Business type
+- Address
+- City
+- State
+- State code
+- PIN code
+- Country
+- Business phone
+- Business email
+- Website
+- Default currency
+For the initial Indian market, INR should be the default currency.
+14.2 GST settings
+Fields:
+- GST registration status
+- GSTIN
+- Registration type
+- Registered state
+- Default tax treatment
+- Default place-of-supply behavior
+- Default HSN/SAC handling
+- Applicable document settings
+Registration types should accommodate the business's relevant tax status, such as regular registration, composition scheme, or unregistered status.
+
+The application must not allow users to collect tax indiscriminately simply because a tax rate is selected.
+
+Tax invoice and bill-of-supply workflows must be distinguished where applicable.
+14.3 Invoice settings
+Allow configuration of:
+- Invoice prefix
+- Estimate prefix
+- Payment receipt prefix
+- Financial-year numbering
+- Number padding
+- Default payment terms
+- Default due-date rule
+- Default notes
+- Default terms and conditions
+- Invoice PDF layout
+- Authorized signature or stamp image
+Once an invoice has been issued, its number must remain unchanged.
+
+Numbering changes should affect only future documents and must not create duplicate identifiers.
+14.4 Financial year
+The system should support Indian financial-year boundaries, normally 1 April through 31 March, with appropriate configuration for businesses operating under different requirements.
+
+Financial-year selection must not depend on the server's timezone.
+
+For example, the financial year from 1 April 2026 to 31 March 2027 is FY 2026–27.
+14.5 Tax configuration
+Maintain a configurable tax-rate list with:
+- Tax rate
+- Effective date, where needed
+- Applicable tax category
+- Active or inactive status
+Historical invoices must preserve the rate and tax amounts used when they were issued.
+
+Never change the tax amount on an old invoice simply because a default tax rate is updated.
+14.6 Email settings
+Allow the administrator to configure:
+- Sender display name
+- Sender email
+- SMTP host
+- SMTP port
+- Encryption mode
+- Authentication credentials
+- Invoice email template
+- Payment reminder template
+SMTP passwords must not be displayed after saving. Prefer storing secrets in protected environment configuration rather than exposing them through application pages.
+
+If the hosting plan does not support secure secret management, restrict access to the configuration file and prevent it from being served publicly.
+14.7 Account settings
+Include:
+- User profile
+- Password management
+- Connected Google identity
+- Active sessions, if supported
+- Account export
+- Account deletion request
+14.8 Application preferences
+Include:
+- Date format
+- Number format
+- Timezone
+- Default report period
+- Notification preferences
+- Theme preference, if a dark mode is implemented
+The default design should remain light and professional.
+15. Core Financial Business Logic
+This section is critical. The application must use a single calculation engine for invoice forms, stored documents, PDFs, and reports.
+15.1 Monetary precision
+Use MySQL DECIMAL types or integer paise for monetary values. Do not use floating-point database columns for financial amounts.
+
+Suggested conventions:
+- Monetary amounts: DECIMAL(15,2)
+- Unit prices: DECIMAL(15,4) where additional precision is needed
+- Quantity: DECIMAL(15,3) or a suitable configurable precision
+- Tax rates: DECIMAL(7,4) or an appropriate precision
+Choose precision based on the supported business workflows and accounting requirements.
+
+All calculations must follow a documented rounding policy. Do not round at inconsistent stages in different modules.
+15.2 Line-item calculation
+For a standard line item:
+
+Gross line value = Quantity × Unit price
+
+If the discount is a percentage:
+
+Discount amount = Gross line value × Discount percentage ÷ 100
+
+Then:
+
+Taxable line value = Gross line value − Applicable pre-tax discount
+
+The applicable tax is calculated from the taxable value and the selected tax treatment.
+
+For example, for a taxable item with a gross value of ₹10,000 and a 10% pre-tax discount:
+Calculation	Amount
+Gross value	₹10,000
+Discount	₹1,000
+Taxable value	₹9,000
+GST at 18%	₹1,620
+Total	₹10,620
+
+
+This example assumes the discount reduces taxable value and the full 18% rate applies to the item.
+15.3 Tax calculation
+For a standard intra-state taxable supply with an applicable total GST rate of 18%, the usual presentation is:
+- CGST: 9%
+- SGST: 9%
+For a standard inter-state taxable supply with the same total rate:
+- IGST: 18%
+This is an illustrative calculation, not a universal rule for every transaction.
+
+The system must determine the appropriate tax treatment from the relevant business configuration, supply details, and applicable rules.
+15.4 Invoice-level discount
+If an invoice-level discount is applied:
+1. Determine the eligible line-item values.
+2. Allocate the discount according to the documented allocation method.
+3. Recalculate the taxable value of each affected line.
+4. Recalculate applicable taxes.
+5. Apply the documented rounding policy.
+6. Reconcile any rounding difference.
+Do not subtract a discount from the final amount without determining its correct tax treatment.
+15.5 Invoice totals
+The final invoice total must be derived from the validated line items, discounts, taxes, and applicable additional charges.
+
+Conceptually:
+
+Invoice total = Sum of taxable values + Applicable taxes + Other charges − Applicable post-tax adjustments
+
+Any rounding adjustment must be separately identifiable.
+
+The calculation engine must define exactly which values are rounded at line level and which are rounded at document level.
+15.6 Partial payments
+For each invoice:
+
+Outstanding balance = Issued invoice total − Valid allocated payments − Applicable credit adjustments
+
+The implementation must ensure that a credit adjustment reduces the receivable only when it is valid under the supported document workflow.
+
+Voided invoices, reversed payments, and drafts must not be included as if they were valid transactions.
+15.7 Credit notes and debit notes
+A full accounting product should eventually support credit notes and debit notes.
+
+For the first release, decide whether to include a limited adjustment workflow or explicitly defer these documents.
+
+If they are deferred, the application must not pretend that editing or deleting an issued invoice is a compliant substitute.
+15.8 Document numbering
+Invoice and estimate numbers must be:
+- Unique within their defined scope.
+- Generated on the server.
+- Resistant to concurrent requests.
+- Associated with the correct business and financial year.
+- Preserved after issuance.
+- Auditable.
+Use a database-backed counter or equivalent transactional strategy rather than generating a number from MAX(invoice_number) + 1.
+
+The database must enforce the relevant uniqueness constraints.
+16. Database Design
+Use InnoDB tables with foreign keys, appropriate indexes, and explicit ownership relationships.
+
+All tables should have a consistent naming convention. Use UTC timestamps for event storage where appropriate, while rendering dates in the business's configured timezone.
+
+The following is a proposed logical schema. Final column definitions and indexes should be documented in the database migration files.
+16.1 Core tables
+Table	Purpose
+users	User accounts and authentication information
+businesses	Business workspace profiles
+business_members	User-to-business membership and roles
+oauth_accounts	External authentication identities
+user_sessions	Session metadata, if persistent session tracking is implemented
+customers	Customer records
+products	Product and service catalog
+invoices	Invoice headers and financial totals
+invoice_items	Invoice line-item snapshots
+estimates	Estimate headers
+estimate_items	Estimate line items
+recurring_profiles	Recurring invoice configurations
+recurring_occurrences	Scheduled recurring execution history
+payments	Receipt headers
+payment_allocations	Receipt-to-invoice allocations
+payment_reversals	Payment reversal records, if modeled separately
+invoice_adjustments	Supported credit/debit adjustments
+document_sequences	Transaction-safe document numbering
+tax_rates	Tax-rate configuration
+business_settings	Business-specific configuration
+email_logs	Email delivery attempts and results
+audit_logs	Important user and system actions
+password_reset_tokens	Hashed password reset tokens
+email_verification_tokens	Email verification workflow
+
+
+Some supporting tables can be combined or expanded during implementation, but the resulting design must preserve the same business guarantees.
+16.2 Database design requirements
+Primary keys
+Use non-guessable public identifiers where beneficial, while keeping internal primary keys efficient.
+
+Never treat a difficult-to-guess ID as a substitute for authorization.
+Foreign keys
+Use foreign keys for important relationships, including:
+- Invoice to business
+- Invoice to customer
+- Invoice item to invoice
+- Payment to business
+- Payment allocation to payment and invoice
+- Estimate to customer
+- Estimate item to estimate
+- Recurring occurrence to recurring profile and generated invoice
+Indexes
+Add indexes for common queries:
+- Business ownership
+- Invoice number
+- Invoice date
+- Invoice due date
+- Customer name
+- Customer GSTIN, where useful
+- Payment date
+- Payment reference
+- Estimate status
+- Recurring next-run date
+Create composite indexes based on actual query patterns, such as business ID and invoice date.
+Financial snapshots
+Issued documents must preserve the values necessary to reproduce their original content.
+
+Invoice item records should retain:
+- Product description
+- SKU, if applicable
+- HSN/SAC
+- Quantity
+- Unit
+- Unit price
+- Discount
+- Tax rate
+- Taxable value
+- Tax amounts
+- Line total
+Invoice headers should preserve relevant supplier and customer details, document number, dates, tax classification, and total amounts.
+Soft deletion
+Use archival or soft-deletion mechanisms for entities with historical relationships.
+
+Do not apply soft deletion indiscriminately to financial events. Posted receipts and issued invoices require controlled correction workflows rather than ordinary deletion flags.
+17. Recommended Project Structure
+Use a maintainable structure suitable for PHP on shared hosting.
+toollab-invoice/
+│
+├── app/
+│   ├── Controllers/
+│   │   ├── AuthController.php
+│   │   ├── DashboardController.php
+│   │   ├── InvoiceController.php
+│   │   ├── EstimateController.php
+│   │   ├── RecurringInvoiceController.php
+│   │   ├── CustomerController.php
+│   │   ├── ProductController.php
+│   │   ├── PaymentController.php
+│   │   ├── ReportController.php
+│   │   └── SettingsController.php
+│   │
+│   ├── Services/
+│   │   ├── AuthenticationService.php
+│   │   ├── AuthorizationService.php
+│   │   ├── InvoiceService.php
+│   │   ├── InvoiceCalculationService.php
+│   │   ├── TaxCalculationService.php
+│   │   ├── DocumentNumberService.php
+│   │   ├── EstimateService.php
+│   │   ├── RecurringInvoiceService.php
+│   │   ├── PaymentService.php
+│   │   ├── ReportService.php
+│   │   ├── PdfService.php
+│   │   ├── ExportService.php
+│   │   └── EmailService.php
+│   │
+│   ├── Repositories/
+│   │   ├── UserRepository.php
+│   │   ├── BusinessRepository.php
+│   │   ├── InvoiceRepository.php
+│   │   ├── CustomerRepository.php
+│   │   ├── ProductRepository.php
+│   │   └── PaymentRepository.php
+│   │
+│   ├── Middleware/
+│   │   ├── AuthenticationMiddleware.php
+│   │   ├── AuthorizationMiddleware.php
+│   │   ├── CsrfMiddleware.php
+│   │   └── RateLimitMiddleware.php
+│   │
+│   ├── Validators/
+│   ├── Policies/
+│   ├── Support/
+│   └── Views/
+│       ├── layouts/
+│       ├── components/
+│       ├── auth/
+│       ├── dashboard/
+│       ├── invoices/
+│       ├── estimates/
+│       ├── recurring/
+│       ├── customers/
+│       ├── products/
+│       ├── payments/
+│       ├── reports/
+│       └── settings/
+│
+├── config/
+│   ├── app.php
+│   ├── database.php
+│   ├── auth.php
+│   ├── mail.php
+│   └── services.php
+│
+├── database/
+│   ├── migrations/
+│   ├── seeders/
+│   └── schema/
+│
+├── public/
+│   ├── index.php
+│   ├── assets/
+│   │   ├── css/
+│   │   ├── js/
+│   │   ├── images/
+│   │   └── icons/
+│   ├── manifest.json
+│   ├── sw.js
+│   ├── offline.html
+│   └── .htaccess
+│
+├── routes/
+│   ├── web.php
+│   └── api.php
+│
+├── storage/
+│   ├── logs/
+│   ├── cache/
+│   ├── invoices/
+│   ├── exports/
+│   └── backups/
+│
+├── resources/
+│   ├── css/
+│   ├── js/
+│   ├── email-templates/
+│   └── pdf-templates/
+│
+├── bin/
+│   └── process-recurring-invoices.php
+│
+├── tests/
+│   ├── Unit/
+│   ├── Feature/
+│   ├── Security/
+│   └── Integration/
+│
+├── docs/
+│   ├── PRD.md
+│   ├── ARCHITECTURE.md
+│   ├── DATABASE.md
+│   ├── SECURITY.md
+│   ├── DEPLOYMENT.md
+│   ├── GST-LOGIC.md
+│   ├── BACKUP-RESTORE.md
+│   └── TESTING.md
+│
+├── vendor/
+├── composer.json
+├── composer.lock
+├── .env.example
+├── .gitignore
+└── README.md
+
+Structure rules
+1. Only the public/ directory should be web-accessible.
+2. If Hostinger requires a different document-root arrangement, configure the deployment so that private application files remain outside the public directory.
+3. If the host cannot support the preferred structure directly, use an appropriate protected deployment layout and test access restrictions.
+4. Never expose vendor/, .env, SQL dumps, logs, private exports, or backup files over HTTP.
+5. Do not place all application logic inside public/index.php.
+6. Do not duplicate financial calculations in controllers and templates.
+7. Use migrations to manage database changes.
+8. Keep production configuration separate from development configuration.
+9. Commit source code and migration files, not secrets or real customer data.
+18. Security Requirements
+Security is a core requirement because the application stores business identities, customer details, financial documents, and payment information.
+
+The implementation should follow established guidance such as the OWASP Cheat Sheet Series.
+18.1 SQL injection protection
+- Use PDO prepared statements for data values.
+- Never construct SQL by concatenating untrusted user input.
+- Use allowlists for dynamic column names and sorting directions.
+- Validate identifiers and pagination parameters.
+- Use a database account with only the privileges the application needs.
+- Do not expose database error messages to users.
+Reference: OWASP SQL Injection Prevention Cheat Sheet.
+18.2 Cross-site scripting
+- Escape output according to its HTML, attribute, URL, or JavaScript context.
+- Treat customer names, product descriptions, notes, and uploaded filenames as untrusted.
+- Avoid unsafe HTML insertion in JavaScript.
+- Use a Content Security Policy where compatible with the application's scripts and integrations.
+- Never assume that database-stored text is safe to render.
+18.3 CSRF protection
+All state-changing operations must require CSRF protection.
+
+This includes:
+- Creating and editing invoices
+- Issuing and voiding documents
+- Recording and reversing payments
+- Editing customers and products
+- Updating settings
+- Deleting or archiving records
+- Changing authentication settings
+Use server-validated CSRF tokens. SameSite cookies provide an additional defense but are not a replacement for request validation.
+18.4 Authorization
+Every sensitive request must verify:
+- The user is authenticated.
+- The user belongs to the selected business.
+- The user has permission to perform the requested action.
+- The requested record belongs to that business.
+- The requested operation is valid for the record's current state.
+Never rely only on hidden buttons, client-side checks, or unguessable URLs.
+18.5 File upload security
+If the application supports business logos, signatures, or other uploads:
+- Restrict file types and sizes.
+- Validate the actual file content, not just the extension.
+- Generate server-controlled filenames.
+- Reject dangerous file formats.
+- Store files outside the public directory when possible.
+- Prevent executable uploads.
+- Restrict file access.
+- Process images safely before embedding them in PDFs.
+18.6 Payment data
+The first release should record payments rather than process card payments directly.
+
+Do not store card numbers, CVVs, banking passwords, UPI PINs, or other payment authentication secrets.
+
+For future online payment collection, integrate a reputable payment gateway and use its supported hosted checkout or tokenized flow.
+18.7 Audit logging
+Record important operations, including:
+- Login and authentication events
+- Business profile changes
+- Invoice issuance
+- Invoice voiding
+- Estimate conversion
+- Payment recording
+- Payment reversal
+- Document numbering changes
+- Tax setting changes
+- User and permission changes
+- Data export events
+Audit entries should contain the actor, business, action, target record, timestamp, and relevant non-sensitive context.
+
+Do not write passwords, session tokens, OAuth tokens, SMTP credentials, or unnecessary sensitive customer data to logs.
+18.8 Rate limiting
+Apply rate limits to:
+- Login
+- Registration
+- Password reset
+- Email verification
+- Google sign-in callbacks
+- Email sending
+- Export generation
+- Other sensitive endpoints
+Rate limiting should not depend entirely on a user-supplied identifier.
+18.9 Error handling
+Production mode must:
+- Disable public display of PHP errors.
+- Log diagnostic information privately.
+- Show understandable error messages.
+- Roll back incomplete financial transactions.
+- Avoid revealing database credentials, filesystem paths, or stack traces.
+- Provide a request reference for investigating unexpected failures.
+19. PWA and Mobile Installation
+The application must support installation on compatible mobile and desktop browsers.
+19.1 Web app manifest
+Create public/manifest.json with fields similar to the following:
+{
+  "id": "/",
+  "name": "ToolLab Invoice",
+  "short_name": "ToolLab Invoice",
+  "description": "Invoices, estimates, payments and business reports.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "theme_color": "#ffffff",
+  "background_color": "#ffffff",
+  "icons": [
+    {
+      "src": "/assets/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/assets/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/assets/icons/icon-maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ]
+}
+
+This is an initial template. The final start_url, scope, asset paths, and colors must match the actual deployment configuration.
+
+If the application is deployed at the root of invoice.toollab.in, the paths above can be appropriate. If it is deployed under a subdirectory, adjust them accordingly.
+
+The application must link the manifest in the HTML head.
+19.2 Service worker
+Implement a service worker for suitable application-shell caching and offline handling.
+
+Requirements:
+- Cache static assets such as CSS, JavaScript, icons, and the offline fallback page.
+- Version the cache and clean up obsolete versions.
+- Avoid caching authenticated financial pages or private API responses in a way that could expose one user's data to another.
+- Never cache login tokens or sensitive payment responses.
+- Do not serve stale invoice information as though it were current.
+- Handle failed network requests with a clear offline message.
+- Update cached assets safely after deployment.
+The initial release does not need full offline invoice creation or offline payment recording.
+
+Financial operations should require a confirmed server response before the interface reports success.
+19.3 Responsive requirements
+The application must work at:
+- 320px mobile width
+- 375px and 390px mobile widths
+- 768px tablet width
+- 1024px tablet or small laptop width
+- 1366px and larger desktop widths
+These are test targets, not the only supported resolutions.
+
+Requirements:
+- No unintended horizontal page overflow.
+- Readable text without browser zoom.
+- Touch-friendly controls.
+- Correct modal sizing.
+- Responsive forms and navigation.
+- Accessible keyboard navigation.
+- Properly sized invoice previews and print layouts.
+- Usable report filters on small screens.
+19.4 Offline behavior
+When offline, the application may display its cached shell and a helpful offline screen.
+
+It must not claim that an invoice has been issued, a payment recorded, or a report exported unless the server has confirmed the operation.
+
+Do not store unsynchronized financial transactions in an undocumented browser queue.
+20. Design System and Visual Direction
+The application should match ToolLab's existing visual identity without copying the public tools website's layout blindly.
+
+The implementation must inspect the existing ToolLab website and reuse its established design language where appropriate.
+
+Reference: ToolLab website
+20.1 Design objectives
+- Clean and minimal
+- Professional business appearance
+- Consistent typography
+- Clear hierarchy
+- Subtle borders and shadows
+- Comfortable spacing
+- Fast interactions
+- Accessible contrast
+- Limited use of accent colors
+Avoid:
+- Excessive gradients
+- Too many colored cards
+- Unnecessary animations
+- Decorative charts that do not communicate useful information
+- Oversized dashboard sections
+- Excessive rounded corners
+- Large empty spaces that waste the available screen
+- Repeated confirmation dialogs for harmless actions
+20.2 Design tokens
+Before implementing the UI, inspect the existing ToolLab logo, website colors, typography, and component styling.
+
+Then define centralized tokens for:
+- Brand colors
+- Primary and secondary text
+- Page background
+- Card background
+- Border colors
+- Success, warning, and error states
+- Font family
+- Font sizes
+- Spacing
+- Border radii
+- Shadows
+- Focus outlines
+- Breakpoints
+Do not hardcode unrelated color values across dozens of files.
+
+The application should use the same visual language across all modules.
+20.3 Component library
+Create reusable components such as:
+- Application layout
+- Sidebar
+- Mobile navigation
+- Page header
+- Buttons
+- Input fields
+- Select fields
+- Date picker
+- Search input
+- Data table
+- Responsive record card
+- Status badge
+- Summary card
+- Dropdown menu
+- Confirmation dialog
+- Toast notification
+- Empty state
+- Loading state
+- Pagination
+- Form validation message
+- Currency display
+- Invoice line-item editor
+- Invoice totals panel
+Components should support consistent behavior, accessibility, and responsive layouts.
+20.4 Status design
+Use text labels in addition to color.
+
+Examples:
+- Draft
+- Issued
+- Partially Paid
+- Paid
+- Overdue
+- Void
+Users must be able to understand a status without distinguishing between similar colors.
+20.5 Accessibility
+Aim for WCAG 2.2 AA where practical.
+
+At minimum:
+- Visible keyboard focus
+- Labels for form controls
+- Accessible dialog behavior
+- Sufficient contrast
+- Descriptive error messages
+- Keyboard-accessible menus
+- Meaningful icon labels
+- Proper table headers
+- Screen-reader-compatible status announcements
+21. Performance Requirements
+The application should remain responsive under normal small-business workloads on shared hosting.
+21.1 Backend performance
+- Use indexed database queries.
+- Avoid loading every invoice or customer into memory.
+- Implement server-side pagination.
+- Avoid unnecessary database queries inside loops.
+- Use transactions for related financial operations.
+- Cache suitable non-sensitive configuration where useful.
+- Avoid generating every PDF during page rendering.
+- Limit export row counts and memory usage.
+- Use efficient queries for dashboard summaries.
+21.2 Frontend performance
+- Load only the JavaScript required for the current page.
+- Avoid unnecessarily large libraries.
+- Use optimized icons and images.
+- Minimize layout shifts.
+- Avoid heavy animations.
+- Keep form interactions responsive.
+- Prevent duplicate form submissions.
+- Display loading indicators for long-running operations.
+21.3 Performance acceptance targets
+Under a representative test dataset and reasonable hosting conditions:
+- Typical page requests should generally complete within 1 second at the application-server level.
+- Invoice and customer lists should load without fetching the entire database.
+- Common actions should provide prompt feedback.
+- Large exports should not block unrelated requests unnecessarily.
+- Dashboard totals should remain correct after filtering or pagination changes.
+These are engineering targets, not guarantees. Actual results depend on the hosting environment, database size, network latency, and third-party services.
+22. Notifications and Email
+The application should support transactional email for important business workflows.
+22.1 Email types
+- Email verification
+- Password reset
+- Invoice delivery
+- Estimate delivery
+- Payment receipt
+- Payment reminder
+- Recurring invoice generation notification
+- Security-related notifications
+22.2 Invoice email workflow
+The user should be able to send an invoice directly from the invoice detail page.
+
+The workflow should:
+1. Verify that the invoice is eligible to send.
+2. Verify that the recipient address is valid.
+3. Generate or retrieve the appropriate PDF.
+4. Send the email through the configured provider.
+5. Record the delivery attempt and result.
+6. Display success or failure.
+7. Allow a controlled retry.
+A successful SMTP submission does not guarantee that an email reached the recipient's inbox. The interface should distinguish between submission success, delivery confirmation where available, and failure.
+22.3 Payment reminders
+Allow reminders to be sent manually.
+
+Automated reminders may be enabled through scheduled jobs if the hosting environment supports them.
+
+The system must avoid repeatedly sending reminders after an invoice has been paid or voided.
+23. Backup, Recovery, and Data Retention
+23.1 Backup requirements
+The business must have a documented backup strategy covering:
+- Database
+- Uploaded business assets
+- Relevant document snapshots
+- Application configuration required for recovery
+Store backups separately from the public web root.
+
+Where possible, maintain an additional protected copy outside the hosting account.
+23.2 Backup security
+- Restrict access to backups.
+- Do not expose SQL dumps through public URLs.
+- Encrypt backups when practical.
+- Protect backup credentials.
+- Define retention periods.
+- Avoid logging secrets.
+- Keep backups separate from temporary export files.
+23.3 Recovery requirements
+Document a restore procedure that includes:
+1. Preparing a clean application environment.
+2. Restoring the database.
+3. Restoring necessary files.
+4. Reapplying appropriate permissions.
+5. Verifying configuration.
+6. Checking invoice and payment consistency.
+7. Testing authentication and authorization.
+8. Confirming that the application is operational.
+Perform periodic restore tests. A backup that has never been tested should not be treated as a proven recovery mechanism.
+23.4 Data retention
+Define retention rules for:
+- Issued invoices
+- Voided invoices
+- Payments and reversals
+- Audit logs
+- Email logs
+- User account data
+- Temporary exports
+- Backups
+The application should not automatically delete historical financial records simply because a customer or user account is closed.
+
+Retention periods must be configurable or documented according to applicable legal requirements.
+24. Testing Strategy
+The application must be tested as a financial system, not just as a collection of pages.
+24.1 Unit tests
+Test:
+- Tax calculations
+- Discount calculations
+- Invoice totals
+- Tax rounding
+- Invoice-level discount allocation
+- Payment allocation
+- Outstanding balances
+- Document numbering
+- Financial-year boundaries
+- Recurring date calculations
+- Report aggregation
+24.2 Integration tests
+Test complete workflows:
+1. Register an account.
+2. Verify the email.
+3. Create a business profile.
+4. Add a customer.
+5. Add a product.
+6. Create an invoice.
+7. Issue the invoice.
+8. Generate its PDF.
+9. Record a partial payment.
+10. Record the remaining payment.
+11. Verify the invoice becomes paid.
+12. Export the sales report.
+13. Verify the exported data matches the saved records.
+24.3 Security tests
+Test:
+- SQL injection attempts
+- Stored and reflected XSS
+- CSRF attacks
+- Session fixation
+- Unauthorized record access
+- Cross-business data access
+- Insecure direct object references
+- Password reset abuse
+- Google sign-in token validation
+- File upload restrictions
+- Unauthorized PDF downloads
+- Unauthorized report exports
+- Rate-limit behavior
+24.4 Financial edge cases
+Test:
+- Zero-value documents where permitted
+- High-value invoices
+- Fractional quantities
+- Discounts with multiple tax rates
+- Partial payments
+- Multiple payments against one invoice
+- One receipt allocated to multiple invoices
+- Overpayment attempts
+- Payment reversals
+- Voided invoices
+- Tax rounding differences
+- Intra-state and inter-state supplies
+- Missing GST details
+- Financial-year transitions
+- Concurrent invoice issuance
+- Duplicate recurring-job execution
+24.5 Responsive tests
+Test the actual application in desktop and mobile browsers.
+
+Verify:
+- Navigation
+- Forms
+- Invoice line items
+- Tables
+- PDF downloads
+- Reports
+- Dialogs
+- Authentication
+- Installation prompts
+- Offline behavior
+25. Development Phases
+Build the application in controlled phases. Do not attempt to implement every module simultaneously.
+Phase 1: Foundation and Authentication
+Deliverables:
+- Project structure
+- Database configuration
+- Environment configuration
+- Authentication
+- Email verification
+- Google sign-in
+- Password recovery
+- Session security
+- Initial business workspace
+- Application layout
+- Design tokens
+- Basic audit logging
+Acceptance criteria: Users can register, sign in securely, create their business profile, and access only their authorized workspace.
+Phase 2: Customers and Products
+Deliverables:
+- Customer CRUD
+- Product and service CRUD
+- Search and pagination
+- Archiving
+- Business ownership checks
+- Initial database migrations
+Acceptance criteria: Users can manage customers and products, and one business cannot access another business's records.
+Phase 3: Invoice Engine
+Deliverables:
+- Invoice form
+- Line-item editor
+- Central calculation service
+- Discounts
+- GST logic
+- Document numbering
+- Draft and issuance workflow
+- Historical snapshots
+- Invoice detail page
+Acceptance criteria: Financial calculations are validated on the server, invoice numbering is concurrency-safe, and issued invoices retain their original values.
+Phase 4: PDF Generation
+Deliverables:
+- Invoice PDF template
+- A4 layout
+- Multi-page support
+- Business branding
+- Print support
+- Secure download endpoint
+Acceptance criteria: Generated PDFs match the saved invoice and cannot be accessed by unauthorized users.
+Phase 5: Estimates
+Deliverables:
+- Estimate CRUD
+- Estimate PDF
+- Status management
+- Estimate conversion
+- Duplicate-conversion protection
+Acceptance criteria: Eligible estimates can be converted into invoice drafts without losing the original agreed details.
+Phase 6: Payments
+Deliverables:
+- Receipt creation
+- Payment allocations
+- Partial payments
+- Receipt PDF
+- Payment reversals
+- Outstanding balance calculations
+Acceptance criteria: Receipts update invoice balances correctly, and reversals preserve a traceable transaction history.
+Phase 7: Reports and Exports
+Deliverables:
+- Sales register
+- GST sales register
+- Tax summary
+- Collection report
+- Outstanding receivables
+- Customer statements
+- XLSX exports
+Acceptance criteria: Exported figures match the underlying saved transactions and respect the selected business and report filters.
+Phase 8: Recurring Invoices
+Deliverables:
+- Recurring profiles
+- Scheduling rules
+- Generation history
+- Idempotency protection
+- Cron integration
+- Failure logging
+Acceptance criteria: A scheduled occurrence cannot generate duplicate invoices, including when a job is retried.
+Phase 9: PWA and Responsive Refinement
+Deliverables:
+- Manifest
+- Application icons
+- Service worker
+- Offline fallback
+- Mobile navigation
+- Responsive data views
+- Installation testing
+Acceptance criteria: The application is usable across target screen sizes and can be installed in compatible browsers without exposing sensitive data through caching.
+Phase 10: Hardening and Production Launch
+Deliverables:
+- Security review
+- Database migration verification
+- Backup and recovery procedure
+- Error monitoring
+- Performance testing
+- Browser compatibility checks
+- Production deployment documentation
+- User-facing help documentation
+Acceptance criteria: Critical security and financial defects are resolved, backups can be restored, and the application is ready for controlled production use.
+26. Deployment on Hostinger
+26.1 Subdomain configuration
+Create the subdomain:
+
+invoice.toollab.in
+
+Configure its document root to point to the application's public directory wherever the hosting configuration permits.
+
+Enable HTTPS before accepting user registrations or business information.
+26.2 Environment configuration
+Production configuration must include:
+- Database host
+- Database name
+- Database username
+- Database password
+- Application environment
+- Application URL
+- Session configuration
+- Google OAuth credentials
+- SMTP configuration
+- File-storage configuration
+- Logging configuration
+Use environment variables or an equivalent protected configuration mechanism.
+
+Do not commit production credentials to GitHub.
+26.3 Database setup
+- Create a dedicated MySQL database.
+- Create a dedicated database user with appropriate privileges.
+- Apply schema migrations.
+- Configure database indexes and constraints.
+- Verify transaction support.
+- Seed only necessary default configuration.
+- Do not populate production with fake customers or financial transactions.
+26.4 Scheduled jobs
+If supported, configure a cron job to run the recurring invoice processor.
+
+The task must use locking, idempotency, logging, and appropriate access restrictions.
+
+Do not expose a publicly accessible endpoint that can generate invoices merely because someone knows its URL.
+26.5 Production deployment
+A deployment checklist must include:
+- Verified HTTPS
+- Correct document root
+- Protected environment configuration
+- Database migration status
+- File permissions
+- Error logging
+- Session security
+- Email configuration
+- Google sign-in callback configuration
+- Backup status
+- Cron configuration
+- Smoke tests
+After each deployment, test login, invoice creation, PDF generation, payment recording, and report export.
+27. Documentation Requirements
+The project must include complete, maintainable documentation.
+
+Create the following documents.
+Document	Required content
+README.md	Project overview, prerequisites, setup, and common commands
+PRD.md	Product requirements and business scope
+ARCHITECTURE.md	Architecture, modules, request lifecycle, and design decisions
+DATABASE.md	Tables, relationships, constraints, indexes, and migrations
+SECURITY.md	Threat model, authentication, authorization, and secure development rules
+GST-LOGIC.md	Tax calculations, classifications, rounding, and validation rules
+INVOICE-LIFECYCLE.md	Document numbering, issuance, payment, voiding, and adjustments
+PAYMENTS.md	Receipts, allocations, reversals, and balance calculations
+REPORTS.md	Report definitions, filters, formulas, and export formats
+DEPLOYMENT.md	Subdomain configuration and production deployment
+BACKUP-RESTORE.md	Backup, retention, restoration, and verification
+TESTING.md	Test setup, test scenarios, and acceptance criteria
+PWA.md	Manifest, service worker, installation, and offline behavior
+CHANGELOG.md	User-visible and technical changes by release
+
+
+Documentation standards
+Documentation must describe the implemented behavior, not merely repeat planned features.
+
+For every financial workflow, explain:
+- Required inputs
+- Validation rules
+- Database changes
+- Transaction boundaries
+- Business rules
+- Failure behavior
+- Audit requirements
+- Expected output
+- Relevant test cases
+When implementation decisions change, update the documentation in the same change set.
+28. Definition of Done
+A feature is not complete merely because its page exists.
+
+Every feature must satisfy these requirements:
+1. The interface is implemented and responsive.
+2. Backend validation is complete.
+3. Authentication and authorization checks are enforced.
+4. Database migrations and constraints are implemented.
+5. Financial rules are documented where applicable.
+6. Errors are handled safely.
+7. Audit logging is implemented where required.
+8. Unit and integration tests cover critical behavior.
+9. Relevant security tests pass.
+10. Empty, loading, success, and error states are implemented.
+11. The feature works on desktop and mobile.
+12. The documentation reflects the actual implementation.
+For financial operations, test both successful execution and failure scenarios, including duplicate requests and concurrent requests.
+29. Explicitly Out of Scope for Version 1
+To keep the first release manageable, do not include these features unless they become essential to the core workflow:
+- Full inventory and warehouse management
+- Purchase and supplier management
+- Payroll
+- Full double-entry accounting
+- Balance sheet and profit-and-loss accounting
+- Direct GST return filing
+- Automatic GST portal uploads
+- E-invoice IRP integration
+- E-way bill integration
+- Direct bank synchronization
+- Online card payment processing
+- Multi-currency accounting
+- Complex approval workflows
+- Advanced enterprise permissions
+- Native Android and iOS applications
+The architecture should permit future extensions, but the first version should not be delayed by implementing all of them.
+30. Future Roadmap
+After the initial application is stable, consider adding:
+Version 1.1
+- Credit notes and debit notes
+- Improved customer statements
+- Automated payment reminders
+- CSV import for customers and products
+- More customizable invoice templates
+Version 1.2
+- Expense tracking
+- Purchase and supplier management
+- More advanced tax-period reconciliation
+- Recurring billing improvements
+- Better account-level reporting
+Version 2.0
+- Inventory management
+- Accounting ledger
+- E-invoice integration, where applicable
+- E-way bill integration, where applicable
+- Online payment gateway integration
+- Multi-user permissions
+- Multiple business workspaces
+- Accountant collaboration
+- Dedicated GST return preparation and validated exports
+These are potential extensions, not commitments for the first release.
+31. Final Implementation Instructions
+The following instructions should guide the development agent or developer who implements this PRD.
+31.1 Analyze before coding
+Before modifying or creating files:
+1. Inspect the existing ToolLab website at toollab.in.
+2. Review the current branding, logo, colors, typography, spacing, and visual conventions.
+3. Confirm the actual hosting environment and available PHP extensions.
+4. Confirm the supported PHP and MySQL versions.
+5. Identify available Composer support.
+6. Finalize the project structure.
+7. Review this PRD and resolve any conflicting implementation assumptions.
+8. Document architecture decisions before implementing major financial workflows.
+Do not blindly copy the public ToolLab website's structure. Reuse the brand's design language while designing an interface appropriate for a business application.
+31.2 Implement real functionality
+Do not create a frontend-only prototype and describe it as a completed application.
+
+Every primary action must work with persistent database records.
+
+Examples:
+- Create Invoice must save a validated invoice.
+- Issue Invoice must assign or finalize a unique document number and preserve the issued record.
+- Download PDF must generate the actual document.
+- Record Payment must save the receipt and allocations.
+- Export Excel must generate a valid spreadsheet containing real filtered records.
+- Convert to Invoice must create a linked invoice draft.
+- Delete must follow the relevant document lifecycle and retention rules.
+- Save Settings must persist and validate the configuration.
+Do not use placeholder buttons, fabricated statistics, simulated payments, or hardcoded customer records in production.
+31.3 Centralize business rules
+Implement reusable services for:
+- Invoice calculations
+- GST calculations
+- Document numbering
+- Invoice issuance
+- Payment allocations
+- Payment reversals
+- Estimate conversion
+- Recurring invoice generation
+- Report calculations
+- PDF generation
+- Spreadsheet generation
+Controllers should coordinate operations rather than contain the full financial calculation logic.
+31.4 Prioritize financial correctness
+Before developing decorative dashboard components or advanced settings, ensure that:
+- Invoice calculations are correct.
+- Tax treatment is configurable and validated.
+- Invoice numbering is reliable.
+- Historical documents remain unchanged.
+- Payment allocations are accurate.
+- Voiding and reversal workflows preserve history.
+- Report totals reconcile with the saved transactions.
+- Cross-business access is prevented.
+31.5 Do not overcomplicate the interface
+Use a clean layout, a limited color palette, reusable components, and straightforward navigation.
+
+The application should be easy to understand without training.
+
+Every major page should have one clear primary action, predictable interactions, helpful empty states, and understandable error messages.
+31.6 Verify before deployment
+Do not deploy based solely on a successful homepage load.
+
+Run the documented test suite and verify the complete invoice lifecycle, PDF generation, payment recording, report exports, account isolation, and mobile usability.
+
+Production launch must be blocked by unresolved critical security vulnerabilities, incorrect financial calculations, duplicate document numbering, or unauthorized access to business records.
+32. Official Technical and Regulatory References
+These references should be consulted during implementation. They are starting points, not substitutes for verifying current requirements before production.
+1. Indian GST invoice requirements: CBIC GST Invoice Rules. Use the applicable provisions of the CGST Rules, including Rule 46, to determine invoice fields and document requirements.
+2. GST legislation: CBIC GST Acts and Rules. Verify applicable legislation, amendments, notifications, and special cases.
+3. PHP password handling: PHP password hashing. Use supported password-hashing functions rather than inventing a custom scheme.
+4. PHP session security: PHP session security. Follow the applicable recommendations for secure sessions.
+5. Google authentication: Google OpenID Connect documentation. Follow the supported authentication flow and validate identity tokens on the server.
+6. Google ID token verification: Verify Google ID tokens. Use a maintained client library where appropriate.
+7. SQL injection prevention: OWASP SQL Injection Prevention Cheat Sheet. Use parameterized queries, input validation, and least-privilege database access.
+8. Excel generation: PhpSpreadsheet documentation. Verify PHP version and extension requirements before installation.
+9. Progressive Web Apps: MDN Progressive Web Apps. Follow current browser requirements for installation, manifest configuration, and service workers.

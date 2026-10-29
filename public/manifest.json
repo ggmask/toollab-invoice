@@ -1,0 +1,26 @@
+{
+  "id": "/",
+  "name": "ToolLab Invoice",
+  "short_name": "ToolLab Invoice",
+  "description": "Professional Invoicing, Estimates, Payments & GST Management for Indian Businesses.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "theme_color": "#4F46E5",
+  "background_color": "#F8FAFC",
+  "icons": [
+    {
+      "src": "/favicon.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}

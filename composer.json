@@ -1,0 +1,14 @@
+{
+    "name": "toollab/invoice",
+    "description": "ToolLab Invoice - Modern Business Invoicing & Management Application",
+    "type": "project",
+    "require": {
+        "php": ">=8.2",
+        "dompdf/dompdf": "^3.1"
+    },
+    "autoload": {
+        "psr-4": {
+            "App\\": "app/"
+        }
+    }
+}
