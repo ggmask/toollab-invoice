@@ -1,111 +1,94 @@
-<div class="max-w-4xl mx-auto space-y-6">
-    <div>
-        <div class="flex items-center gap-2">
-            <span class="text-sm font-medium text-slate-500">Settings</span>
-            <span class="text-slate-400">/</span>
-            <span class="text-sm font-medium text-slate-900">GST Settings</span>
-        </div>
-        <h1 class="text-2xl font-bold text-slate-900 mt-1">GST & Tax Configuration</h1>
-        <p class="text-sm text-slate-500">Configure Goods & Services Tax registration status, GSTIN, PAN, and default Place of Supply.</p>
-    </div>
-
-    <!-- Navigation Tabs -->
-    <div class="border-b border-slate-200">
-        <nav class="flex space-x-6">
-            <a href="<?= url('/settings/business') ?>" class="border-b-2 border-transparent pb-3 text-sm font-medium text-slate-500 hover:text-slate-700">
-                Business & Banking
-            </a>
-            <a href="<?= url('/settings/gst') ?>" class="border-b-2 border-brand-600 pb-3 text-sm font-semibold text-brand-600">
-                GST & Tax Config
-            </a>
-            <a href="<?= url('/settings/invoice') ?>" class="border-b-2 border-transparent pb-3 text-sm font-medium text-slate-500 hover:text-slate-700">
-                Document Numbering & Terms
-            </a>
-            <a href="<?= url('/settings/tax-rates') ?>" class="border-b-2 border-transparent pb-3 text-sm font-medium text-slate-500 hover:text-slate-700">
-                Tax Slabs
-            </a>
-            <a href="<?= url('/settings/account') ?>" class="border-b-2 border-transparent pb-3 text-sm font-medium text-slate-500 hover:text-slate-700">
-                User Security
-            </a>
-        </nav>
-    </div>
-
-    <form method="POST" action="<?= url('/settings/gst') ?>" class="space-y-6">
-        <?= csrf_field() ?>
-
-        <div class="card p-6 space-y-6">
-            <h2 class="text-base font-semibold text-slate-900 border-b border-slate-200 pb-3">GST Registration</h2>
-
-            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <!-- Registration Type -->
-                <div class="md:col-span-2">
-                    <label class="form-label" for="gst_status">GST Registration Scheme <span class="text-rose-500">*</span></label>
-                    <select name="gst_status" id="gst_status" class="form-select" onchange="toggleGstFields(this.value)">
-                        <?php 
-                            $status = $business['gst_status'] ?? 'registered_regular';
-                        ?>
-                        <option value="registered_regular" <?= ($status === 'registered_regular') ? 'selected' : '' ?>>Registered Regular Taxpayer (Standard CGST / SGST / IGST)</option>
-                        <option value="composition" <?= ($status === 'composition') ? 'selected' : '' ?>>Composition Scheme (Bill of Supply - No Tax Collected)</option>
-                        <option value="unregistered" <?= ($status === 'unregistered') ? 'selected' : '' ?>>Unregistered Business (Under ₹20L/₹40L Exemption Threshold)</option>
-                        <option value="sez" <?= ($status === 'sez') ? 'selected' : '' ?>>Special Economic Zone (SEZ Unit / Developer - Zero Rated)</option>
-                    </select>
-                </div>
-
-                <!-- GSTIN -->
-                <div>
-                    <label class="form-label" for="gstin">Goods & Services Tax Identification Number (GSTIN)</label>
-                    <input type="text" name="gstin" id="gstin" value="<?= e($business['gstin'] ?? '') ?>"
-                           class="form-input font-mono uppercase" placeholder="e.g. 27AAACT1234A1Z5"
-                           maxlength="15" oninput="parseGstin(this.value)">
-                    <span class="text-xs text-slate-400 mt-1 block">15-character alphanumeric GST identifier.</span>
-                </div>
-
-                <!-- Permanent Account Number (PAN) -->
-                <div>
-                    <label class="form-label" for="pan">Income Tax PAN</label>
-                    <input type="text" name="pan" id="pan" value="<?= e($business['pan'] ?? '') ?>"
-                           class="form-input font-mono uppercase" placeholder="e.g. AAACT1234A"
-                           maxlength="10">
-                    <span class="text-xs text-slate-400 mt-1 block">Automatically extracted from characters 3–12 of GSTIN.</span>
-                </div>
-
-                <!-- State / UT -->
-                <div class="md:col-span-2">
-                    <label class="form-label" for="state_code">Registration State Code (Default Place of Origin)</label>
-                    <select name="state_code" id="state_code" class="form-select">
-                        <option value="">-- Select State --</option>
-                        <?php foreach ($states as $code => $name): ?>
-                            <option value="<?= $code ?>" <?= (($business['state_code'] ?? '') === $code) ? 'selected' : '' ?>>
-                                <?= $code ?> - <?= e($name) ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                    <span class="text-xs text-slate-400 mt-1 block">Determines Intra-State (CGST+SGST) vs Inter-State (IGST) taxation rules.</span>
-                </div>
-            </div>
-        </div>
-
-        <!-- Compliance Architecture Note -->
-        <div class="card p-5 bg-blue-50/70 border border-blue-200 text-xs text-blue-900 space-y-2">
-            <h4 class="font-bold flex items-center gap-1.5 text-blue-950 text-sm">
-                <svg class="w-4 h-4 text-blue-700" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
-                Indian GST Rule 46 Invoicing Law Notice
-            </h4>
-            <p>
-                When registered as <strong>Registered Regular</strong>, the application produces official <strong>Tax Invoices</strong> with mandatory fields: GSTIN of supplier & recipient, consecutive serial numbering within the Financial Year, HSN/SAC code, taxable value, and tax split.
-            </p>
-            <p>
-                For <strong>Composition Scheme</strong> or <strong>Unregistered</strong>, invoices are automatically marked as <strong>Bill of Supply</strong> without separate tax charging, in full adherence to Section 31 of the CGST Act.
-            </p>
-        </div>
-
-        <div class="flex justify-end">
-            <button type="submit" class="btn btn-primary px-6">
-                Save GST Configuration
-            </button>
-        </div>
-    </form>
+<div class="page-header">
+  <div>
+    <h1 class="page-title">GST & Tax Configuration</h1>
+    <div class="page-description">Configure Goods & Services Tax registration status, GSTIN, PAN, and default Place of Origin.</div>
+  </div>
 </div>
+
+<!-- Settings Navigation Tabs -->
+<div class="nav-tabs">
+  <a href="<?= url('/settings/business') ?>" class="nav-tab-item">Business & Banking</a>
+  <a href="<?= url('/settings/gst') ?>" class="nav-tab-item active">GST & Tax Config</a>
+  <a href="<?= url('/settings/invoice') ?>" class="nav-tab-item">Document Numbering & Terms</a>
+  <a href="<?= url('/settings/tax-rates') ?>" class="nav-tab-item">Tax Slabs</a>
+  <a href="<?= url('/settings/account') ?>" class="nav-tab-item">User Security</a>
+</div>
+
+<form method="POST" action="<?= url('/settings/gst') ?>">
+  <?= csrf_field() ?>
+
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">GST Registration & Tax Identity</h2>
+    </div>
+    <div class="card-body">
+      <div class="form-grid" style="grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));">
+        <div class="form-group" style="grid-column: 1 / -1;">
+          <label class="form-label" for="gst_status">GST Registration Scheme <span style="color: var(--danger);">*</span></label>
+          <select name="gst_status" id="gst_status" class="form-control">
+            <?php 
+              $status = $business['gst_status'] ?? 'registered_regular';
+            ?>
+            <option value="registered_regular" <?= ($status === 'registered_regular') ? 'selected' : '' ?>>Registered Regular Taxpayer (Standard CGST / SGST / IGST Tax Invoices)</option>
+            <option value="composition" <?= ($status === 'composition') ? 'selected' : '' ?>>Composition Scheme (Bill of Supply - No Tax Collected)</option>
+            <option value="unregistered" <?= ($status === 'unregistered') ? 'selected' : '' ?>>Unregistered Business (Under ₹20L/₹40L Exemption Threshold)</option>
+            <option value="sez" <?= ($status === 'sez') ? 'selected' : '' ?>>Special Economic Zone (SEZ Unit / Developer - Zero Rated)</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="gstin">GSTIN (15-Character Identifier)</label>
+          <input type="text" name="gstin" id="gstin" value="<?= e($business['gstin'] ?? '') ?>"
+                 class="form-control" style="font-family: monospace; text-transform: uppercase;"
+                 placeholder="e.g. 27AAACT1234A1Z5" maxlength="15" oninput="parseGstin(this.value)">
+          <div style="font-size: 11px; color: var(--slate-500); margin-top: 4px;">15-character alphanumeric GST identifier.</div>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="pan">Income Tax PAN</label>
+          <input type="text" name="pan" id="pan" value="<?= e($business['pan'] ?? '') ?>"
+                 class="form-control" style="font-family: monospace; text-transform: uppercase;"
+                 placeholder="e.g. AAACT1234A" maxlength="10">
+          <div style="font-size: 11px; color: var(--slate-500); margin-top: 4px;">Automatically extracted from characters 3–12 of GSTIN.</div>
+        </div>
+
+        <div class="form-group" style="grid-column: 1 / -1;">
+          <label class="form-label" for="state_code">Registration State Code (Default Place of Origin)</label>
+          <select name="state_code" id="state_code" class="form-control">
+            <option value="">-- Select State --</option>
+            <?php foreach ($states as $code => $name): ?>
+              <option value="<?= $code ?>" <?= (($business['state_code'] ?? '') === $code) ? 'selected' : '' ?>>
+                <?= $code ?> - <?= e($name) ?>
+              </option>
+            <?php endforeach; ?>
+          </select>
+          <div style="font-size: 11px; color: var(--slate-500); margin-top: 4px;">
+            Supplies within this state attract equal CGST + SGST (Intra-State). Supplies to other states attract IGST (Inter-State).
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Statutory Law Card -->
+  <div class="card" style="padding: 18px 22px; background: var(--info-light); border: 1px solid #BAE6FD; border-radius: var(--radius);">
+    <h4 style="font-size: 14px; font-weight: 700; color: #0369A1; margin-bottom: 6px;">
+      Indian GST Rule 46 Invoicing Law Notice
+    </h4>
+    <p style="font-size: 13px; color: #0284C7; line-height: 1.5; margin: 0 0 6px 0;">
+      When registered as <strong>Registered Regular</strong>, the application produces official <strong>Tax Invoices</strong> with mandatory fields: GSTIN of supplier & recipient, consecutive serial numbering within the Financial Year, HSN/SAC codes, taxable value, and tax splits.
+    </p>
+    <p style="font-size: 12px; color: #0369A1; margin: 0;">
+      For <strong>Composition Scheme</strong> or <strong>Unregistered</strong>, invoices are automatically generated as <strong>Bill of Supply</strong> without tax charging, adhering strictly to Section 31 of the CGST Act.
+    </p>
+  </div>
+
+  <div style="display: flex; justify-content: flex-end; margin-top: 20px;">
+    <button type="submit" class="btn btn-primary" style="padding: 10px 24px;">
+      Save GST Configuration
+    </button>
+  </div>
+</form>
 
 <script>
 function parseGstin(gstin) {

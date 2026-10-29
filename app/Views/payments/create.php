@@ -1,183 +1,172 @@
-<div class="max-w-5xl mx-auto space-y-6">
-    <div class="flex items-center justify-between">
-        <div>
-            <div class="flex items-center gap-2">
-                <a href="<?= url('/payments') ?>" class="text-sm font-medium text-slate-500 hover:text-slate-800">Payments</a>
-                <span class="text-slate-400">/</span>
-                <span class="text-sm font-medium text-slate-900">Record Receipt</span>
-            </div>
-            <h1 class="text-2xl font-bold text-slate-900 mt-1">Record Payment Receipt</h1>
-        </div>
-        <div class="text-right">
-            <span class="text-xs text-slate-500 block">Receipt Voucher #</span>
-            <span class="text-base font-mono font-bold text-brand-600"><?= e($nextReceiptNumber) ?></span>
-        </div>
+<div class="page-header">
+  <div>
+    <h1 class="page-title">Record Payment Receipt</h1>
+    <div class="page-description">Record incoming client remittance, select payment mode, and allocate across open invoices.</div>
+  </div>
+
+  <div class="header-actions">
+    <div style="text-align: right; margin-right: 12px;">
+      <span style="font-size: 11px; color: var(--slate-500); display: block; text-transform: uppercase; font-weight: 600;">Receipt Voucher #</span>
+      <span style="font-family: monospace; font-size: 15px; font-weight: 700; color: var(--primary);"><?= e($nextReceiptNumber) ?></span>
     </div>
-
-    <form method="POST" action="<?= url('/payments') ?>" id="paymentForm" class="space-y-6">
-        <?= csrf_field() ?>
-
-        <div class="card p-6 space-y-6">
-            <h2 class="text-base font-semibold text-slate-900 border-b border-slate-200 pb-3">Payment Details</h2>
-
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <!-- Customer Selection -->
-                <div class="md:col-span-1">
-                    <label class="form-label" for="customer_id">Customer <span class="text-rose-500">*</span></label>
-                    <select name="customer_id" id="customer_id" class="form-select" required onchange="handleCustomerChange(this.value)">
-                        <option value="">-- Select Customer --</option>
-                        <?php foreach ($customers as $c): ?>
-                            <option value="<?= $c['id'] ?>" <?= ($selectedCustomerId == $c['id']) ? 'selected' : '' ?>>
-                                <?= e($c['name']) ?> <?= $c['open_count'] > 0 ? "({$c['open_count']} open)" : '' ?>
-                            </option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-
-                <!-- Payment Date -->
-                <div>
-                    <label class="form-label" for="payment_date">Receipt Date <span class="text-rose-500">*</span></label>
-                    <input type="date" name="payment_date" id="payment_date" value="<?= e($today) ?>" class="form-input" required>
-                </div>
-
-                <!-- Amount Received -->
-                <div>
-                    <label class="form-label" for="amount">Amount Received (₹) <span class="text-rose-500">*</span></label>
-                    <div class="relative">
-                        <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400 font-medium">₹</span>
-                        <input type="number" step="0.01" min="0.01" name="amount" id="amount" class="form-input pl-8 font-semibold text-lg text-slate-900" placeholder="0.00" required oninput="calculateAllocations()">
-                    </div>
-                </div>
-
-                <!-- Payment Method -->
-                <div>
-                    <label class="form-label" for="payment_method">Payment Mode <span class="text-rose-500">*</span></label>
-                    <select name="payment_method" id="payment_method" class="form-select" required>
-                        <?php foreach ($paymentMethods as $mKey => $mLabel): ?>
-                            <option value="<?= $mKey ?>" <?= ($mKey === 'upi') ? 'selected' : '' ?>><?= e($mLabel) ?></option>
-                        <?php endforeach; ?>
-                    </select>
-                </div>
-
-                <!-- Reference / Transaction ID -->
-                <div>
-                    <label class="form-label" for="reference_number">Transaction / Ref #</label>
-                    <input type="text" name="reference_number" id="reference_number" placeholder="UTR / UPI Ref / Cheque No" class="form-input">
-                </div>
-
-                <!-- Bank Name / Account -->
-                <div>
-                    <label class="form-label" for="bank_name">Deposited Bank / Account</label>
-                    <input type="text" name="bank_name" id="bank_name" value="<?= e($business['bank_name'] ?? '') ?>" placeholder="e.g. HDFC Bank, ICICI Bank" class="form-input">
-                </div>
-            </div>
-
-            <!-- Notes -->
-            <div>
-                <label class="form-label" for="notes">Notes & Remarks</label>
-                <textarea name="notes" id="notes" rows="2" class="form-textarea" placeholder="Internal or customer notes..."></textarea>
-            </div>
-        </div>
-
-        <!-- Invoice Allocation Section -->
-        <div class="card p-6 space-y-4">
-            <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b border-slate-200 pb-3">
-                <div>
-                    <h2 class="text-base font-semibold text-slate-900">Allocate to Open Invoices</h2>
-                    <p class="text-xs text-slate-500 mt-0.5">Apply received funds against outstanding customer invoices.</p>
-                </div>
-                <div class="flex items-center gap-2">
-                    <button type="button" onclick="autoAllocate()" class="btn btn-secondary text-xs py-1.5 px-3">
-                        <svg class="w-3.5 h-3.5 mr-1 text-brand-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
-                        Auto Allocate
-                    </button>
-                    <button type="button" onclick="clearAllocations()" class="btn btn-ghost text-xs py-1.5 px-3 text-slate-500 hover:text-rose-600">
-                        Clear All
-                    </button>
-                </div>
-            </div>
-
-            <div id="noCustomerNotice" class="<?= $selectedCustomerId ? 'hidden' : '' ?> py-8 text-center text-slate-400 text-sm">
-                Select a customer above to load outstanding invoices.
-            </div>
-
-            <div id="noInvoicesNotice" class="<?= ($selectedCustomerId && empty($invoices)) ? '' : 'hidden' ?> py-8 text-center text-slate-500 text-sm">
-                This customer currently has no unpaid or partially paid invoices. The payment will be retained as unallocated credit.
-            </div>
-
-            <div id="invoicesTableWrapper" class="<?= !empty($invoices) ? '' : 'hidden' ?> overflow-x-auto">
-                <table class="table" id="invoicesTable">
-                    <thead>
-                        <tr>
-                            <th>Invoice #</th>
-                            <th>Issue Date</th>
-                            <th>Due Date</th>
-                            <th class="text-right">Total (₹)</th>
-                            <th class="text-right">Already Paid (₹)</th>
-                            <th class="text-right">Balance Due (₹)</th>
-                            <th class="text-right w-48">Allocated Amount (₹)</th>
-                        </tr>
-                    </thead>
-                    <tbody id="invoicesTableBody" class="divide-y divide-slate-200">
-                        <?php foreach ($invoices as $inv): ?>
-                            <tr data-invoice-id="<?= $inv['id'] ?>" data-balance="<?= $inv['balance_due'] ?>">
-                                <td class="font-semibold text-slate-900">
-                                    <a href="<?= url('/invoices/' . $inv['id']) ?>" target="_blank" class="text-brand-600 hover:underline">
-                                        <?= e($inv['invoice_number']) ?> ↗
-                                    </a>
-                                </td>
-                                <td class="text-slate-600 text-sm"><?= format_date($inv['issue_date']) ?></td>
-                                <td class="text-slate-600 text-sm"><?= format_date($inv['due_date']) ?></td>
-                                <td class="text-right text-slate-700"><?= format_currency($inv['total_amount']) ?></td>
-                                <td class="text-right text-slate-500"><?= format_currency($inv['paid_amount']) ?></td>
-                                <td class="text-right font-semibold text-rose-600">
-                                    <?= format_currency($inv['balance_due']) ?>
-                                </td>
-                                <td class="text-right">
-                                    <div class="relative">
-                                        <span class="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-slate-400 text-xs">₹</span>
-                                        <input type="number" step="0.01" min="0" max="<?= $inv['balance_due'] ?>"
-                                               name="allocations[<?= $inv['id'] ?>]"
-                                               value="<?= ($selectedInvoiceId == $inv['id']) ? min((float)$inv['balance_due'], 0.0) : '0.00' ?>"
-                                               class="form-input pl-7 text-right text-sm font-medium alloc-input"
-                                               oninput="calculateAllocations()">
-                                    </div>
-                                </td>
-                            </tr>
-                        <?php endforeach; ?>
-                    </tbody>
-                </table>
-            </div>
-
-            <!-- Allocation Summary -->
-            <div class="bg-slate-50 rounded-lg p-4 border border-slate-200 grid grid-cols-1 sm:grid-cols-3 gap-4 text-center">
-                <div>
-                    <span class="text-xs text-slate-500 block uppercase font-medium">Received Amount</span>
-                    <span class="text-lg font-bold text-slate-900" id="summaryReceived">₹0.00</span>
-                </div>
-                <div>
-                    <span class="text-xs text-slate-500 block uppercase font-medium">Total Allocated</span>
-                    <span class="text-lg font-bold text-emerald-600" id="summaryAllocated">₹0.00</span>
-                </div>
-                <div>
-                    <span class="text-xs text-slate-500 block uppercase font-medium">Unallocated Credit</span>
-                    <span class="text-lg font-bold text-slate-700" id="summaryUnallocated">₹0.00</span>
-                </div>
-            </div>
-
-            <div id="allocationWarning" class="hidden p-3 bg-rose-50 border border-rose-200 rounded-md text-xs text-rose-700 font-medium">
-                Warning: Total allocated amount exceeds the received payment amount! Please adjust allocation amounts.
-            </div>
-        </div>
-
-        <div class="flex items-center justify-end gap-3">
-            <a href="<?= url('/payments') ?>" class="btn btn-secondary">Cancel</a>
-            <button type="submit" id="submitBtn" class="btn btn-primary px-6">
-                Save & Post Receipt
-            </button>
-        </div>
-    </form>
+    <a href="<?= url('/payments') ?>" class="btn btn-secondary btn-sm">
+      &larr; Back to Payments
+    </a>
+  </div>
 </div>
+
+<form method="POST" action="<?= url('/payments') ?>" id="paymentForm">
+  <?= csrf_field() ?>
+
+  <!-- 1. Payment Information -->
+  <div class="card">
+    <div class="card-header">
+      <h2 class="card-title">1. Payment Details</h2>
+    </div>
+    <div class="card-body">
+      <div class="form-grid" style="grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));">
+        <div class="form-group" style="grid-column: span 2;">
+          <label class="form-label" for="customer_id">Customer <span style="color: var(--danger);">*</span></label>
+          <select name="customer_id" id="customer_id" class="form-control" required onchange="handleCustomerChange(this.value)">
+            <option value="">-- Select Customer --</option>
+            <?php foreach ($customers as $c): ?>
+              <option value="<?= $c['id'] ?>" <?= ($selectedCustomerId == $c['id']) ? 'selected' : '' ?>>
+                <?= e($c['name']) ?> <?= $c['open_count'] > 0 ? "({$c['open_count']} open invoices)" : '' ?>
+              </option>
+            <?php endforeach; ?>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="payment_date">Receipt Date <span style="color: var(--danger);">*</span></label>
+          <input type="date" name="payment_date" id="payment_date" value="<?= e($today) ?>" class="form-control" required>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="amount">Amount Received (₹) <span style="color: var(--danger);">*</span></label>
+          <input type="number" step="0.01" min="0.01" name="amount" id="amount" class="form-control" placeholder="0.00" required oninput="calculateAllocations()" style="font-size: 16px; font-weight: 700; color: var(--slate-900);">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="payment_method">Payment Mode <span style="color: var(--danger);">*</span></label>
+          <select name="payment_method" id="payment_method" class="form-control" required>
+            <?php foreach ($paymentMethods as $mKey => $mLabel): ?>
+              <option value="<?= $mKey ?>" <?= ($mKey === 'upi') ? 'selected' : '' ?>><?= e($mLabel) ?></option>
+            <?php endforeach; ?>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="reference_number">Transaction / Ref # (UTR / Cheque No)</label>
+          <input type="text" name="reference_number" id="reference_number" placeholder="e.g. UTR12345678, UPI Ref" class="form-control">
+        </div>
+
+        <div class="form-group">
+          <label class="form-label" for="bank_name">Deposited Bank / Account</label>
+          <input type="text" name="bank_name" id="bank_name" value="<?= e($business['bank_name'] ?? '') ?>" placeholder="e.g. HDFC Bank, ICICI Bank" class="form-control">
+        </div>
+
+        <div class="form-group" style="grid-column: 1 / -1;">
+          <label class="form-label" for="notes">Notes & Internal Remarks</label>
+          <textarea name="notes" id="notes" rows="2" class="form-control" placeholder="Optional internal or client payment notes..."></textarea>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. Invoice Allocations -->
+  <div class="card">
+    <div class="card-header" style="display: flex; justify-content: space-between; align-items: center;">
+      <h2 class="card-title">2. Allocate to Open Invoices</h2>
+      <div style="display: flex; gap: 8px;">
+        <button type="button" onclick="autoAllocate()" class="btn btn-secondary btn-sm">
+          Auto Allocate
+        </button>
+        <button type="button" onclick="clearAllocations()" class="btn btn-secondary btn-sm" style="color: var(--danger);">
+          Clear All
+        </button>
+      </div>
+    </div>
+    <div class="card-body">
+      <div id="noCustomerNotice" class="<?= $selectedCustomerId ? 'hidden' : '' ?>" style="text-align: center; padding: 32px 16px; color: var(--slate-500);">
+        Select a customer above to view and allocate against outstanding invoices.
+      </div>
+
+      <div id="noInvoicesNotice" class="<?= ($selectedCustomerId && empty($invoices)) ? '' : 'hidden' ?>" style="text-align: center; padding: 32px 16px; color: var(--slate-500);">
+        This customer currently has no unpaid or partially paid invoices. The payment will be retained as unallocated credit.
+      </div>
+
+      <div id="invoicesTableWrapper" class="<?= !empty($invoices) ? '' : 'hidden' ?> table-responsive" style="margin-bottom: 20px;">
+        <table class="table" id="invoicesTable">
+          <thead>
+            <tr>
+              <th>Invoice #</th>
+              <th>Issue Date</th>
+              <th>Due Date</th>
+              <th class="text-right">Total Invoice (₹)</th>
+              <th class="text-right">Paid Amount (₹)</th>
+              <th class="text-right">Balance Due (₹)</th>
+              <th class="text-right" style="width: 180px;">Allocated Amount (₹)</th>
+            </tr>
+          </thead>
+          <tbody id="invoicesTableBody">
+            <?php foreach ($invoices as $inv): ?>
+              <tr data-invoice-id="<?= $inv['id'] ?>" data-balance="<?= $inv['balance_due'] ?>">
+                <td style="font-weight: 600;">
+                  <a href="<?= url('/invoices/' . $inv['id']) ?>" target="_blank" style="color: var(--primary);">
+                    <?= e($inv['invoice_number']) ?> ↗
+                  </a>
+                </td>
+                <td style="font-size: 12px; color: var(--slate-500);"><?= format_date($inv['issue_date']) ?></td>
+                <td style="font-size: 12px; color: var(--slate-500);"><?= format_date($inv['due_date']) ?></td>
+                <td class="text-right"><?= format_currency($inv['total_amount']) ?></td>
+                <td class="text-right" style="color: var(--slate-500);"><?= format_currency($inv['paid_amount']) ?></td>
+                <td class="text-right" style="font-weight: 700; color: var(--danger);">
+                  <?= format_currency($inv['balance_due']) ?>
+                </td>
+                <td class="text-right">
+                  <input type="number" step="0.01" min="0" max="<?= $inv['balance_due'] ?>"
+                         name="allocations[<?= $inv['id'] ?>]"
+                         value="<?= ($selectedInvoiceId == $inv['id']) ? min((float)$inv['balance_due'], 0.0) : '0.00' ?>"
+                         class="form-control form-control-sm alloc-input"
+                         style="text-align: right; font-weight: 600;"
+                         oninput="calculateAllocations()">
+                </td>
+              </tr>
+            <?php endforeach; ?>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Allocation Summary Grid -->
+      <div style="background: var(--slate-50); border: 1px solid var(--slate-200); border-radius: var(--radius); padding: 16px; display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 16px; text-align: center;">
+        <div>
+          <span style="font-size: 11px; text-transform: uppercase; font-weight: 600; color: var(--slate-500); display: block;">Received Amount</span>
+          <span style="font-size: 18px; font-weight: 700; color: var(--slate-900);" id="summaryReceived">₹0.00</span>
+        </div>
+        <div>
+          <span style="font-size: 11px; text-transform: uppercase; font-weight: 600; color: var(--slate-500); display: block;">Total Allocated</span>
+          <span style="font-size: 18px; font-weight: 700; color: var(--success);" id="summaryAllocated">₹0.00</span>
+        </div>
+        <div>
+          <span style="font-size: 11px; text-transform: uppercase; font-weight: 600; color: var(--slate-500); display: block;">Unallocated Credit</span>
+          <span style="font-size: 18px; font-weight: 700; color: var(--slate-700);" id="summaryUnallocated">₹0.00</span>
+        </div>
+      </div>
+
+      <div id="allocationWarning" class="hidden" style="margin-top: 12px; padding: 10px 14px; background: var(--danger-light); border: 1px solid #FECACA; border-radius: var(--radius); color: #991B1B; font-size: 12px; font-weight: 600;">
+        Warning: Total allocated amount exceeds the received payment amount! Please adjust allocation amounts.
+      </div>
+    </div>
+  </div>
+
+  <div style="display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px;">
+    <a href="<?= url('/payments') ?>" class="btn btn-secondary">Cancel</a>
+    <button type="submit" id="submitBtn" class="btn btn-primary" style="padding: 10px 24px;">
+      Save & Post Receipt
+    </button>
+  </div>
+</form>
 
 <script>
 function handleCustomerChange(customerId) {
@@ -190,7 +179,6 @@ function handleCustomerChange(customerId) {
         return;
     }
 
-    // Fetch invoices via JSON endpoint
     fetch('<?= url('/payments/customer-invoices/') ?>' + customerId)
         .then(res => res.json())
         .then(invoices => {
@@ -210,25 +198,23 @@ function handleCustomerChange(customerId) {
                     tr.setAttribute('data-invoice-id', inv.id);
                     tr.setAttribute('data-balance', inv.balance_due);
                     tr.innerHTML = `
-                        <td class="font-semibold text-slate-900">
-                            <a href="<?= url('/invoices/') ?>${inv.id}" target="_blank" class="text-brand-600 hover:underline">
+                        <td style="font-weight: 600;">
+                            <a href="<?= url('/invoices/') ?>${inv.id}" target="_blank" style="color: var(--primary);">
                                 ${inv.invoice_number} ↗
                             </a>
                         </td>
-                        <td class="text-slate-600 text-sm">${inv.issue_date}</td>
-                        <td class="text-slate-600 text-sm">${inv.due_date}</td>
-                        <td class="text-right text-slate-700">₹${parseFloat(inv.total_amount).toFixed(2)}</td>
-                        <td class="text-right text-slate-500">₹${parseFloat(inv.paid_amount).toFixed(2)}</td>
-                        <td class="text-right font-semibold text-rose-600">₹${parseFloat(inv.balance_due).toFixed(2)}</td>
+                        <td style="font-size: 12px; color: var(--slate-500);">${inv.issue_date}</td>
+                        <td style="font-size: 12px; color: var(--slate-500);">${inv.due_date}</td>
+                        <td class="text-right">₹${parseFloat(inv.total_amount).toFixed(2)}</td>
+                        <td class="text-right" style="color: var(--slate-500);">₹${parseFloat(inv.paid_amount).toFixed(2)}</td>
+                        <td class="text-right" style="font-weight: 700; color: var(--danger);">₹${parseFloat(inv.balance_due).toFixed(2)}</td>
                         <td class="text-right">
-                            <div class="relative">
-                                <span class="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none text-slate-400 text-xs">₹</span>
-                                <input type="number" step="0.01" min="0" max="${inv.balance_due}"
-                                       name="allocations[${inv.id}]"
-                                       value="0.00"
-                                       class="form-input pl-7 text-right text-sm font-medium alloc-input"
-                                       oninput="calculateAllocations()">
-                            </div>
+                            <input type="number" step="0.01" min="0" max="${inv.balance_due}"
+                                   name="allocations[${inv.id}]"
+                                   value="0.00"
+                                   class="form-control form-control-sm alloc-input"
+                                   style="text-align: right; font-weight: 600;"
+                                   oninput="calculateAllocations()">
                         </td>
                     `;
                     tbody.appendChild(tr);
@@ -301,7 +287,6 @@ function clearAllocations() {
     calculateAllocations();
 }
 
-// Initial calculation on load if values present
 document.addEventListener('DOMContentLoaded', () => {
     calculateAllocations();
 });
