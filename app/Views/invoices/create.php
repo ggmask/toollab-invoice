@@ -239,9 +239,6 @@
                 <option value="percentage">%</option>
               </select>
             </div>
-            <div style="font-size: 11px; color: var(--slate-500); margin-top: 3px;">
-              Pre-tax discount (₹ or %). Post-tax round-off or discount can be manually entered in Rounding Adjustment.
-            </div>
           </div>
 
           <!-- Additional Charges -->

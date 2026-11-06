@@ -187,9 +187,6 @@
                 <option value="percentage" <?= $invoice['invoice_discount_type'] === 'percentage' ? 'selected' : '' ?>>%</option>
               </select>
             </div>
-            <div style="font-size: 11px; color: var(--slate-500); margin-top: 3px;">
-              Pre-tax discount (₹ or %). Post-tax round-off or discount can be manually entered in Rounding Adjustment.
-            </div>
           </div>
           <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 8px;">
             <div>
