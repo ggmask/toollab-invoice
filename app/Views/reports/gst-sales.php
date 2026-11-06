@@ -160,6 +160,39 @@
             <?php endforeach; ?>
           <?php endif; ?>
         </tbody>
+        <?php if (!empty($hsnSummary)): ?>
+          <?php
+            $hsnTotQty = 0.0;
+            $hsnTotVal = 0.0;
+            $hsnTotTaxable = 0.0;
+            $hsnTotIgst = 0.0;
+            $hsnTotCgst = 0.0;
+            $hsnTotSgst = 0.0;
+            $hsnTotTax = 0.0;
+
+            foreach ($hsnSummary as $h) {
+              $hsnTotQty += (float)$h['total_qty'];
+              $hsnTotVal += (float)$h['total_value'];
+              $hsnTotTaxable += (float)$h['taxable_value'];
+              $hsnTotIgst += (float)$h['igst_amount'];
+              $hsnTotCgst += (float)$h['cgst_amount'];
+              $hsnTotSgst += (float)$h['sgst_amount'];
+              $hsnTotTax += (float)$h['total_tax'];
+            }
+          ?>
+          <tfoot style="background: var(--slate-100); font-weight: 700; border-top: 2px solid var(--slate-300);">
+            <tr>
+              <td colspan="3" style="text-align: right; text-transform: uppercase; font-size: 11px;">Table 12 Total:</td>
+              <td class="text-right"><?= number_format($hsnTotQty, 2) ?></td>
+              <td class="text-right" style="color: var(--slate-900);"><?= format_currency($hsnTotVal) ?></td>
+              <td class="text-right"><?= format_currency($hsnTotTaxable) ?></td>
+              <td class="text-right"><?= format_currency($hsnTotIgst) ?></td>
+              <td class="text-right"><?= format_currency($hsnTotCgst) ?></td>
+              <td class="text-right"><?= format_currency($hsnTotSgst) ?></td>
+              <td class="text-right" style="color: var(--primary); font-size: 13px;"><?= format_currency($hsnTotTax) ?></td>
+            </tr>
+          </tfoot>
+        <?php endif; ?>
       </table>
     </div>
 
@@ -238,6 +271,33 @@
             <?php endforeach; ?>
           <?php endif; ?>
         </tbody>
+        <?php if (!empty($displayRows)): ?>
+          <?php
+            $dispTaxable = 0.0;
+            $dispCgst = 0.0;
+            $dispSgst = 0.0;
+            $dispIgst = 0.0;
+            $dispTotal = 0.0;
+            foreach ($displayRows as $dr) {
+              $dispTaxable += (float)$dr['taxable_value'];
+              $dispCgst += (float)$dr['cgst_amount'];
+              $dispSgst += (float)$dr['sgst_amount'];
+              $dispIgst += (float)$dr['igst_amount'];
+              $dispTotal += (float)$dr['line_total'];
+            }
+          ?>
+          <tfoot style="background: var(--slate-100); font-weight: 700; border-top: 2px solid var(--slate-300);">
+            <tr>
+              <td colspan="8" style="text-align: right; text-transform: uppercase; font-size: 11px;">Total (<?= strtoupper($section) ?>):</td>
+              <td class="text-right"><?= format_currency($dispTaxable) ?></td>
+              <td></td>
+              <td class="text-right"><?= format_currency($dispCgst) ?></td>
+              <td class="text-right"><?= format_currency($dispSgst) ?></td>
+              <td class="text-right"><?= format_currency($dispIgst) ?></td>
+              <td class="text-right" style="color: var(--slate-900); font-size: 13px;"><?= format_currency($dispTotal) ?></td>
+            </tr>
+          </tfoot>
+        <?php endif; ?>
       </table>
     </div>
   <?php endif; ?>

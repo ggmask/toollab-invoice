@@ -185,6 +185,11 @@ function initLineItemsCalculator() {
     const cgstRow = document.getElementById('row_cgst');
     const sgstRow = document.getElementById('row_sgst');
     const igstRow = document.getElementById('row_igst');
+    const addChargesRow = document.getElementById('row_add_charges');
+
+    if (addChargesRow) {
+      addChargesRow.style.display = (addCharges > 0) ? 'flex' : 'none';
+    }
 
     if (isIntraState) {
       if (cgstRow) cgstRow.style.display = 'flex';
@@ -201,7 +206,7 @@ function initLineItemsCalculator() {
 
     const taxLabelSuffix = isReverseCharge ? ' (RCM - Paid by Recipient)' : '';
     setText('sum_tax_total', formatCurrencyJs(taxTotal) + taxLabelSuffix);
-    setText('sum_add_charges', formatCurrencyJs(addCharges));
+    setText('sum_add_charges', '+ ' + formatCurrencyJs(addCharges));
     setText('sum_round_off', (roundOff >= 0 ? '+' : '') + formatCurrencyJs(roundOff));
     setText('sum_final_total', formatCurrencyJs(finalTotal));
   }

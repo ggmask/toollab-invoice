@@ -154,9 +154,13 @@ class InvoiceCalculationService
         // Step 4: Additional Charges / Freight Taxation (Section 15 CGST Act)
         $additionalCharges = max(0.0, round((float)$additionalCharges, 2));
         $additionalChargesGstRate = max(0.0, (float)$additionalChargesGstRate);
+        $itemsTaxableSum = $totalTaxable;
         $addChargeTax = [
+            'cgst_rate' => 0.0,
             'cgst_amount' => 0.0,
+            'sgst_rate' => 0.0,
             'sgst_amount' => 0.0,
+            'igst_rate' => 0.0,
             'igst_amount' => 0.0,
             'total_tax' => 0.0,
         ];
@@ -174,6 +178,53 @@ class InvoiceCalculationService
         }
 
         $taxTotal = round($totalCgst + $totalSgst + $totalIgst + $totalCess, 2);
+
+        // Group taxes by GST slab for clear display and accounting
+        $taxBreakdown = [];
+        foreach ($calculatedItems as $it) {
+            $rKey = (string)(float)$it['gst_rate'];
+            if (!isset($taxBreakdown[$rKey])) {
+                $taxBreakdown[$rKey] = [
+                    'gst_rate' => (float)$it['gst_rate'],
+                    'cgst_rate' => (float)$it['cgst_rate'],
+                    'sgst_rate' => (float)$it['sgst_rate'],
+                    'igst_rate' => (float)$it['igst_rate'],
+                    'taxable_value' => 0.0,
+                    'cgst_amount' => 0.0,
+                    'sgst_amount' => 0.0,
+                    'igst_amount' => 0.0,
+                    'total_tax' => 0.0,
+                ];
+            }
+            $taxBreakdown[$rKey]['taxable_value'] = round($taxBreakdown[$rKey]['taxable_value'] + $it['taxable_value'], 2);
+            $taxBreakdown[$rKey]['cgst_amount'] = round($taxBreakdown[$rKey]['cgst_amount'] + $it['cgst_amount'], 2);
+            $taxBreakdown[$rKey]['sgst_amount'] = round($taxBreakdown[$rKey]['sgst_amount'] + $it['sgst_amount'], 2);
+            $taxBreakdown[$rKey]['igst_amount'] = round($taxBreakdown[$rKey]['igst_amount'] + $it['igst_amount'], 2);
+            $taxBreakdown[$rKey]['total_tax'] = round($taxBreakdown[$rKey]['total_tax'] + $it['total_tax'], 2);
+        }
+
+        if ($additionalCharges > 0 && $additionalChargesGstRate > 0) {
+            $rKey = (string)(float)$additionalChargesGstRate;
+            if (!isset($taxBreakdown[$rKey])) {
+                $taxBreakdown[$rKey] = [
+                    'gst_rate' => (float)$additionalChargesGstRate,
+                    'cgst_rate' => (float)$addChargeTax['cgst_rate'],
+                    'sgst_rate' => (float)$addChargeTax['sgst_rate'],
+                    'igst_rate' => (float)$addChargeTax['igst_rate'],
+                    'taxable_value' => 0.0,
+                    'cgst_amount' => 0.0,
+                    'sgst_amount' => 0.0,
+                    'igst_amount' => 0.0,
+                    'total_tax' => 0.0,
+                ];
+            }
+            $taxBreakdown[$rKey]['taxable_value'] = round($taxBreakdown[$rKey]['taxable_value'] + $additionalCharges, 2);
+            $taxBreakdown[$rKey]['cgst_amount'] = round($taxBreakdown[$rKey]['cgst_amount'] + $addChargeTax['cgst_amount'], 2);
+            $taxBreakdown[$rKey]['sgst_amount'] = round($taxBreakdown[$rKey]['sgst_amount'] + $addChargeTax['sgst_amount'], 2);
+            $taxBreakdown[$rKey]['igst_amount'] = round($taxBreakdown[$rKey]['igst_amount'] + $addChargeTax['igst_amount'], 2);
+            $taxBreakdown[$rKey]['total_tax'] = round($taxBreakdown[$rKey]['total_tax'] + $addChargeTax['total_tax'], 2);
+        }
+        ksort($taxBreakdown, SORT_NUMERIC);
 
         // Step 5: Customer Payable Total & Rounding Adjustment
         // Under Reverse Charge (RCM), tax is payable by recipient directly to Govt, NOT collected by supplier
@@ -197,12 +248,14 @@ class InvoiceCalculationService
             'invoice_discount_type' => $discountType,
             'invoice_discount_value' => $discountValue,
             'invoice_discount_amount' => round($invoiceDiscountAmount, 2),
+            'items_taxable_total' => round($itemsTaxableSum, 2),
             'taxable_value' => round($totalTaxable, 2),
             'cgst_amount' => round($totalCgst, 2),
             'sgst_amount' => round($totalSgst, 2),
             'igst_amount' => round($totalIgst, 2),
             'cess_amount' => round($totalCess, 2),
             'tax_total' => $taxTotal,
+            'tax_breakdown' => array_values($taxBreakdown),
             'additional_charges' => $additionalCharges,
             'additional_charges_gst_rate' => $additionalChargesGstRate,
             'additional_charges_tax' => $addChargeTax['total_tax'],

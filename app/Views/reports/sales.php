@@ -84,7 +84,7 @@
   <div class="stat-card">
     <div class="stat-label">Total GST Collected</div>
     <div class="stat-value" style="color: #9333EA;"><?= format_currency($totals['cgst'] + $totals['sgst'] + $totals['igst']) ?></div>
-    <div class="stat-subtext">CGST+SGST: <?= format_currency($totals['cgst'] + $totals['sgst']) ?></div>
+    <div class="stat-subtext">CGST: <?= format_currency($totals['cgst']) ?> | SGST: <?= format_currency($totals['sgst']) ?> | IGST: <?= format_currency($totals['igst']) ?></div>
   </div>
 
   <div class="stat-card">
@@ -116,6 +116,7 @@
           <th>Date</th>
           <th>Customer</th>
           <th>GSTIN</th>
+          <th>Supply / POS</th>
           <th class="text-right">Taxable (₹)</th>
           <th class="text-right">CGST (₹)</th>
           <th class="text-right">SGST (₹)</th>
@@ -129,7 +130,7 @@
       <tbody>
         <?php if (empty($rows)): ?>
           <tr>
-            <td colspan="12" style="text-align: center; padding: 40px; color: var(--slate-500);">
+            <td colspan="13" style="text-align: center; padding: 40px; color: var(--slate-500);">
               No sales invoices found for the selected period and criteria.
             </td>
           </tr>
@@ -147,6 +148,18 @@
               </td>
               <td style="font-family: monospace; font-size: 11px; color: var(--slate-500); white-space: nowrap;">
                 <?= e($r['customer_gstin'] ?: 'Unregistered') ?>
+              </td>
+              <td>
+                <div>
+                  <?php if (($r['supply_type'] ?? '') === 'inter_state' || (float)($r['igst_amount'] ?? 0) > 0): ?>
+                    <span class="badge" style="background: rgba(147, 51, 234, 0.1); color: #9333EA; font-size: 10px; font-weight: 700;">Inter-State</span>
+                  <?php else: ?>
+                    <span class="badge" style="background: rgba(59, 130, 246, 0.1); color: #2563EB; font-size: 10px; font-weight: 700;">Intra-State</span>
+                  <?php endif; ?>
+                </div>
+                <div style="font-size: 11px; color: var(--slate-500); margin-top: 2px; white-space: nowrap;">
+                  <?= e($r['place_of_supply_state_code'] ? $r['place_of_supply_state_code'] . '-' : '') ?><?= e($r['place_of_supply_state'] ?: 'Default') ?>
+                </div>
               </td>
               <td class="text-right" style="font-size: 13px;"><?= format_currency($r['taxable_value']) ?></td>
               <td class="text-right" style="font-size: 12px; color: var(--slate-500);"><?= format_currency($r['cgst_amount']) ?></td>
@@ -169,7 +182,7 @@
       <?php if (!empty($rows)): ?>
         <tfoot style="background: var(--slate-100); font-weight: 700; border-top: 2px solid var(--slate-300);">
           <tr>
-            <td colspan="4" style="text-align: right; text-transform: uppercase; font-size: 11px;">Total Summary:</td>
+            <td colspan="5" style="text-align: right; text-transform: uppercase; font-size: 11px;">Total Summary:</td>
             <td class="text-right"><?= format_currency($totals['taxable']) ?></td>
             <td class="text-right"><?= format_currency($totals['cgst']) ?></td>
             <td class="text-right"><?= format_currency($totals['sgst']) ?></td>

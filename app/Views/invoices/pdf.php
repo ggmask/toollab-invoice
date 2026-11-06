@@ -66,6 +66,37 @@ foreach ($items as $it) {
     $totalIgst += (float)$it['igst_amount'];
     $totalTax += (float)$it['total_tax'];
 }
+
+// Include taxable shipping/freight charges in HSN breakdown if present
+if ((float)$invoice['additional_charges'] > 0) {
+    $addTaxable = (float)$invoice['additional_charges'];
+    $addCgst = max(0.0, (float)$invoice['cgst_amount'] - $totalCgst);
+    $addSgst = max(0.0, (float)$invoice['sgst_amount'] - $totalSgst);
+    $addIgst = max(0.0, (float)$invoice['igst_amount'] - $totalIgst);
+    $addTax = $addCgst + $addSgst + $addIgst;
+
+    if ($addTax > 0) {
+        $freightRate = round(($addTax / $addTaxable) * 100, 1);
+        $groupKey = '9965_' . $freightRate;
+        $hsnBreakdown[$groupKey] = [
+            'hsn_sac' => '9965 (Freight)',
+            'gst_rate' => $freightRate,
+            'taxable_value' => $addTaxable,
+            'cgst_rate' => round($freightRate / 2, 2),
+            'cgst_amount' => $addCgst,
+            'sgst_rate' => round($freightRate / 2, 2),
+            'sgst_amount' => $addSgst,
+            'igst_rate' => $freightRate,
+            'igst_amount' => $addIgst,
+            'total_tax' => $addTax,
+        ];
+        $totalTaxable += $addTaxable;
+        $totalCgst += $addCgst;
+        $totalSgst += $addSgst;
+        $totalIgst += $addIgst;
+        $totalTax += $addTax;
+    }
+}
 ?>
 <!DOCTYPE html>
 <html>
@@ -261,36 +292,49 @@ foreach ($items as $it) {
   <div class="avoid-break" style="overflow: hidden; margin-top: 8px;">
     <table class="totals-box">
       <tr>
-        <td>Subtotal (Taxable Value):</td>
+        <td>Gross Items Subtotal:</td>
+        <td class="text-right"><?= format_currency($invoice['subtotal_gross']) ?></td>
+      </tr>
+      <?php if ((float)$invoice['line_discounts_total'] > 0): ?>
+        <tr>
+          <td>Line Discounts:</td>
+          <td class="text-right">- <?= format_currency($invoice['line_discounts_total']) ?></td>
+        </tr>
+      <?php endif; ?>
+      <?php if ((float)$invoice['invoice_discount_amount'] > 0): ?>
+        <tr>
+          <td>Invoice Discount:</td>
+          <td class="text-right">- <?= format_currency($invoice['invoice_discount_amount']) ?></td>
+        </tr>
+      <?php endif; ?>
+      <?php if ((float)$invoice['additional_charges'] > 0): ?>
+        <tr>
+          <td><?= e($invoice['additional_charges_label'] ?: 'Shipping / Handling') ?>:</td>
+          <td class="text-right">+ <?= format_currency($invoice['additional_charges']) ?></td>
+        </tr>
+      <?php endif; ?>
+      <tr style="border-top: 1px dashed #d1d5db; font-weight: bold;">
+        <td>Taxable Turnover:</td>
         <td class="text-right"><?= format_currency($invoice['taxable_value']) ?></td>
       </tr>
       <?php if (!$isComposition): ?>
-        <?php if ($invoice['cgst_amount'] > 0): ?>
+        <?php if ($invoice['supply_type'] === 'inter_state'): ?>
           <tr>
-            <td>CGST:</td>
+            <td>Integrated Tax (IGST):</td>
+            <td class="text-right"><?= format_currency($invoice['igst_amount']) ?></td>
+          </tr>
+        <?php else: ?>
+          <tr>
+            <td>Central Tax (CGST):</td>
             <td class="text-right"><?= format_currency($invoice['cgst_amount']) ?></td>
           </tr>
-        <?php endif; ?>
-        <?php if ($invoice['sgst_amount'] > 0): ?>
           <tr>
-            <td>SGST / UTGST:</td>
+            <td>State/UT Tax (SGST):</td>
             <td class="text-right"><?= format_currency($invoice['sgst_amount']) ?></td>
           </tr>
         <?php endif; ?>
-        <?php if ($invoice['igst_amount'] > 0): ?>
-          <tr>
-            <td>IGST:</td>
-            <td class="text-right"><?= format_currency($invoice['igst_amount']) ?></td>
-          </tr>
-        <?php endif; ?>
       <?php endif; ?>
-      <?php if ($invoice['additional_charges'] > 0): ?>
-        <tr>
-          <td><?= e($invoice['additional_charges_label'] ?: 'Shipping / Handling') ?>:</td>
-          <td class="text-right"><?= format_currency($invoice['additional_charges']) ?></td>
-        </tr>
-      <?php endif; ?>
-      <?php if ($invoice['rounding_adjustment'] != 0): ?>
+      <?php if ((float)$invoice['rounding_adjustment'] != 0): ?>
         <tr>
           <td>Round Off:</td>
           <td class="text-right"><?= ($invoice['rounding_adjustment'] > 0 ? '+' : '') . format_currency($invoice['rounding_adjustment']) ?></td>

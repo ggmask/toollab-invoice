@@ -151,4 +151,40 @@ final class InvoiceCalculationServiceTest extends TestCase
         $this->assertIsFloat($res['rounding_adjustment']);
         $this->assertEquals(round($res['total_amount']), $res['total_amount'], 'Total amount must be rounded');
     }
+
+    public function testTaxBreakdownSlabsGrouped(): void
+    {
+        $items = [
+            [
+                'name' => 'Item 18%',
+                'quantity' => 1,
+                'unit_price' => 1000.00,
+                'gst_rate' => 18.0,
+            ],
+            [
+                'name' => 'Item 5%',
+                'quantity' => 1,
+                'unit_price' => 2000.00,
+                'gst_rate' => 5.0,
+            ],
+        ];
+
+        $res = InvoiceCalculationService::calculate($items, 'intra_state', 'flat', 0.0, 100.0, 18.0);
+
+        $this->assertEquals(3000.00, $res['items_taxable_total']);
+        $this->assertEquals(3100.00, $res['taxable_value']);
+        $this->assertArrayHasKey('tax_breakdown', $res);
+        $this->assertCount(2, $res['tax_breakdown']);
+
+        $slab18 = null;
+        foreach ($res['tax_breakdown'] as $b) {
+            if ((float)$b['gst_rate'] === 18.0) {
+                $slab18 = $b;
+            }
+        }
+        $this->assertNotNull($slab18);
+        $this->assertEquals(1100.00, $slab18['taxable_value']);
+        $this->assertEquals(99.00, $slab18['cgst_amount']);
+        $this->assertEquals(99.00, $slab18['sgst_amount']);
+    }
 }

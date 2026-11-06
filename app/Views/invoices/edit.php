@@ -235,29 +235,29 @@
           <span>Invoice Discount:</span>
           <span id="sum_inv_discount" style="color: var(--danger);">- ₹ 0.00</span>
         </div>
+        <div class="totals-row" id="row_add_charges">
+          <span>Shipping / Extra Charges:</span>
+          <span id="sum_add_charges" style="color: var(--slate-700);">+ ₹ 0.00</span>
+        </div>
         <div class="totals-row" style="font-weight: 600; border-top: 1px dashed var(--slate-200); padding-top: 8px;">
           <span>Taxable Turnover:</span>
           <span id="sum_taxable_value">₹ 0.00</span>
         </div>
         <div class="totals-row" id="row_cgst">
-          <span>CGST:</span>
+          <span id="label_cgst">CGST:</span>
           <span id="sum_cgst">₹ 0.00</span>
         </div>
         <div class="totals-row" id="row_sgst">
-          <span>SGST:</span>
+          <span id="label_sgst">SGST / UTGST:</span>
           <span id="sum_sgst">₹ 0.00</span>
         </div>
         <div class="totals-row" id="row_igst" style="display: none;">
-          <span>IGST:</span>
+          <span id="label_igst">IGST:</span>
           <span id="sum_igst">₹ 0.00</span>
         </div>
         <div class="totals-row">
           <span>Total Tax:</span>
           <span id="sum_tax_total" style="font-weight: 600;">₹ 0.00</span>
-        </div>
-        <div class="totals-row">
-          <span>Additional Charges:</span>
-          <span id="sum_add_charges">₹ 0.00</span>
         </div>
         <div class="totals-row">
           <span>Rounding Adjustment:</span>

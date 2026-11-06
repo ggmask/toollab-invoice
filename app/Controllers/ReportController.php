@@ -82,15 +82,19 @@ class ReportController
 
         if ($export === 'csv' || $export === 'excel') {
             AuditService::log('report.exported', 'report', null, ['type' => 'sales', 'format' => $export]);
-            $headers = ['Invoice #', 'Date', 'Due Date', 'Customer', 'GSTIN', 'Taxable Value', 'CGST', 'SGST', 'IGST', 'Total Amount', 'Paid Amount', 'Balance Due', 'Status'];
+            $headers = ['Invoice #', 'Date', 'Due Date', 'Customer', 'GSTIN', 'Supply Type', 'Place of Supply', 'Taxable Value', 'CGST', 'SGST', 'IGST', 'Total Amount', 'Paid Amount', 'Balance Due', 'Status'];
             $data = [];
             foreach ($rows as $r) {
+                $isInter = ($r['supply_type'] ?? '') === 'inter_state' || (float)($r['igst_amount'] ?? 0) > 0;
+                $pos = trim(($r['place_of_supply_state_code'] ? $r['place_of_supply_state_code'] . '-' : '') . ($r['place_of_supply_state'] ?? ''));
                 $data[] = [
                     $r['invoice_number'],
                     $r['issue_date'],
                     $r['due_date'],
                     $r['customer_name'],
                     $r['customer_gstin'] ?: 'Unregistered',
+                    $isInter ? 'Inter-State' : 'Intra-State',
+                    $pos ?: 'Default',
                     (float)$r['taxable_value'],
                     (float)$r['cgst_amount'],
                     (float)$r['sgst_amount'],
@@ -164,7 +168,76 @@ class ReportController
             ORDER BY i.issue_date ASC, i.id ASC, ii.item_order ASC
         ");
         $stmt->execute([$businessId, $startDate, $endDate]);
-        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $rawSlabs = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        // Also incorporate any freight / additional charges with GST so tax summary matches invoice totals exactly
+        $invStmt = $pdo->prepare("
+            SELECT 
+                i.id as invoice_id, i.invoice_number, i.issue_date,
+                i.additional_charges,
+                i.cgst_amount as inv_cgst, i.sgst_amount as inv_sgst, i.igst_amount as inv_igst,
+                COALESCE(SUM(ii.cgst_amount), 0) as items_cgst,
+                COALESCE(SUM(ii.sgst_amount), 0) as items_sgst,
+                COALESCE(SUM(ii.igst_amount), 0) as items_igst
+            FROM invoices i
+            LEFT JOIN invoice_items ii ON ii.invoice_id = i.id
+            WHERE i.business_id = ? 
+              AND i.status IN ('issued', 'partially_paid', 'paid')
+              AND i.issue_date BETWEEN ? AND ?
+              AND i.additional_charges > 0
+            GROUP BY i.id
+        ");
+        $invStmt->execute([$businessId, $startDate, $endDate]);
+        $freightInvoices = $invStmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $slabMap = [];
+        foreach ($rawSlabs as $r) {
+            $rateKey = (string)(float)$r['gst_rate'];
+            $slabMap[$rateKey] = [
+                'gst_rate' => (float)$r['gst_rate'],
+                'invoice_count' => (int)$r['invoice_count'],
+                'total_taxable' => (float)$r['total_taxable'],
+                'total_cgst' => (float)$r['total_cgst'],
+                'total_sgst' => (float)$r['total_sgst'],
+                'total_igst' => (float)$r['total_igst'],
+                'total_cess' => (float)$r['total_cess'],
+                'total_tax' => (float)$r['total_tax'],
+                'total_amount' => (float)$r['total_amount'],
+            ];
+        }
+
+        foreach ($freightInvoices as $fi) {
+            $addTaxable = (float)$fi['additional_charges'];
+            $addCgst = max(0.0, (float)$fi['inv_cgst'] - (float)$fi['items_cgst']);
+            $addSgst = max(0.0, (float)$fi['inv_sgst'] - (float)$fi['items_sgst']);
+            $addIgst = max(0.0, (float)$fi['inv_igst'] - (float)$fi['items_igst']);
+            $addTax = $addCgst + $addSgst + $addIgst;
+
+            $freightRate = ($addTaxable > 0 && $addTax > 0) ? round(($addTax / $addTaxable) * 100, 1) : 0.0;
+            $rateKey = (string)$freightRate;
+
+            if (!isset($slabMap[$rateKey])) {
+                $slabMap[$rateKey] = [
+                    'gst_rate' => $freightRate,
+                    'invoice_count' => 0,
+                    'total_taxable' => 0.0,
+                    'total_cgst' => 0.0,
+                    'total_sgst' => 0.0,
+                    'total_igst' => 0.0,
+                    'total_cess' => 0.0,
+                    'total_tax' => 0.0,
+                    'total_amount' => 0.0,
+                ];
+            }
+            $slabMap[$rateKey]['total_taxable'] += $addTaxable;
+            $slabMap[$rateKey]['total_cgst'] += $addCgst;
+            $slabMap[$rateKey]['total_sgst'] += $addSgst;
+            $slabMap[$rateKey]['total_igst'] += $addIgst;
+            $slabMap[$rateKey]['total_tax'] += $addTax;
+            $slabMap[$rateKey]['total_amount'] += round($addTaxable + $addTax, 2);
+        }
+        ksort($slabMap, SORT_NUMERIC);
+        $rows = array_values($slabMap);
 
         $b2bRows = [];
         $b2cLargeRows = [];
@@ -693,7 +766,76 @@ class ReportController
             ORDER BY ii.gst_rate ASC
         ");
         $stmt->execute([$businessId, $startDate, $endDate]);
-        $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+        $rawSlabs = $stmt->fetchAll(PDO::FETCH_ASSOC);
+
+        // Also incorporate any freight / additional charges with GST so tax summary matches invoice totals exactly
+        $invStmt = $pdo->prepare("
+            SELECT 
+                i.id as invoice_id, i.invoice_number, i.issue_date,
+                i.additional_charges,
+                i.cgst_amount as inv_cgst, i.sgst_amount as inv_sgst, i.igst_amount as inv_igst,
+                COALESCE(SUM(ii.cgst_amount), 0) as items_cgst,
+                COALESCE(SUM(ii.sgst_amount), 0) as items_sgst,
+                COALESCE(SUM(ii.igst_amount), 0) as items_igst
+            FROM invoices i
+            LEFT JOIN invoice_items ii ON ii.invoice_id = i.id
+            WHERE i.business_id = ? 
+              AND i.status IN ('issued', 'partially_paid', 'paid')
+              AND i.issue_date BETWEEN ? AND ?
+              AND i.additional_charges > 0
+            GROUP BY i.id
+        ");
+        $invStmt->execute([$businessId, $startDate, $endDate]);
+        $freightInvoices = $invStmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $slabMap = [];
+        foreach ($rawSlabs as $r) {
+            $rateKey = (string)(float)$r['gst_rate'];
+            $slabMap[$rateKey] = [
+                'gst_rate' => (float)$r['gst_rate'],
+                'invoice_count' => (int)$r['invoice_count'],
+                'total_taxable' => (float)$r['total_taxable'],
+                'total_cgst' => (float)$r['total_cgst'],
+                'total_sgst' => (float)$r['total_sgst'],
+                'total_igst' => (float)$r['total_igst'],
+                'total_cess' => (float)$r['total_cess'],
+                'total_tax' => (float)$r['total_tax'],
+                'total_amount' => (float)$r['total_amount'],
+            ];
+        }
+
+        foreach ($freightInvoices as $fi) {
+            $addTaxable = (float)$fi['additional_charges'];
+            $addCgst = max(0.0, (float)$fi['inv_cgst'] - (float)$fi['items_cgst']);
+            $addSgst = max(0.0, (float)$fi['inv_sgst'] - (float)$fi['items_sgst']);
+            $addIgst = max(0.0, (float)$fi['inv_igst'] - (float)$fi['items_igst']);
+            $addTax = $addCgst + $addSgst + $addIgst;
+
+            $freightRate = ($addTaxable > 0 && $addTax > 0) ? round(($addTax / $addTaxable) * 100, 1) : 0.0;
+            $rateKey = (string)$freightRate;
+
+            if (!isset($slabMap[$rateKey])) {
+                $slabMap[$rateKey] = [
+                    'gst_rate' => $freightRate,
+                    'invoice_count' => 0,
+                    'total_taxable' => 0.0,
+                    'total_cgst' => 0.0,
+                    'total_sgst' => 0.0,
+                    'total_igst' => 0.0,
+                    'total_cess' => 0.0,
+                    'total_tax' => 0.0,
+                    'total_amount' => 0.0,
+                ];
+            }
+            $slabMap[$rateKey]['total_taxable'] += $addTaxable;
+            $slabMap[$rateKey]['total_cgst'] += $addCgst;
+            $slabMap[$rateKey]['total_sgst'] += $addSgst;
+            $slabMap[$rateKey]['total_igst'] += $addIgst;
+            $slabMap[$rateKey]['total_tax'] += $addTax;
+            $slabMap[$rateKey]['total_amount'] += round($addTaxable + $addTax, 2);
+        }
+        ksort($slabMap, SORT_NUMERIC);
+        $rows = array_values($slabMap);
 
         if ($export === 'csv' || $export === 'excel') {
             AuditService::log('report.exported', 'report', null, ['type' => 'tax_summary', 'format' => $export]);
