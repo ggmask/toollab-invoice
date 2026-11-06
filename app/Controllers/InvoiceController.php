@@ -201,6 +201,9 @@ class InvoiceController
         $additionalChargesLabel = trim($request->post('additional_charges_label', 'Shipping / Other Charges'));
         $additionalChargesGstRate = max(0.0, (float)$request->post('additional_charges_gst_rate', 0));
         $isReverseCharge = (bool)$request->post('is_reverse_charge', false);
+        $manualRounding = ($request->has('rounding_adjustment') && trim((string)$request->post('rounding_adjustment')) !== '')
+            ? (float)$request->post('rounding_adjustment')
+            : null;
 
         // Calculation Service
         $calc = InvoiceCalculationService::calculate(
@@ -210,7 +213,8 @@ class InvoiceController
             $discountValue,
             $additionalCharges,
             $additionalChargesGstRate,
-            $isReverseCharge
+            $isReverseCharge,
+            $manualRounding
         );
 
         $status = ($submitAction === 'issue') ? 'issued' : 'draft';
@@ -571,6 +575,9 @@ class InvoiceController
         $additionalChargesLabel = trim($request->post('additional_charges_label', 'Shipping / Other Charges'));
         $additionalChargesGstRate = max(0.0, (float)$request->post('additional_charges_gst_rate', 0));
         $isReverseCharge = (bool)$request->post('is_reverse_charge', false);
+        $manualRounding = ($request->has('rounding_adjustment') && trim((string)$request->post('rounding_adjustment')) !== '')
+            ? (float)$request->post('rounding_adjustment')
+            : null;
 
         $calc = InvoiceCalculationService::calculate(
             $rawItems,
@@ -579,7 +586,8 @@ class InvoiceController
             $discountValue,
             $additionalCharges,
             $additionalChargesGstRate,
-            $isReverseCharge
+            $isReverseCharge,
+            $manualRounding
         );
         $fy = FinancialYear::forDate($issueDate);
 

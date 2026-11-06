@@ -179,13 +179,16 @@
       <div class="card-body">
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
           <div>
-            <label class="form-label" for="invoice_discount_value">Invoice Discount</label>
+            <label class="form-label" for="invoice_discount_value">Invoice Discount (Pre-Tax)</label>
             <div style="display: flex; gap: 4px;">
               <input type="number" step="0.01" name="invoice_discount_value" id="invoice_discount_value" class="form-control" value="<?= (float)$invoice['invoice_discount_value'] ?>">
               <select name="invoice_discount_type" id="invoice_discount_type" class="form-control" style="width: 70px;">
                 <option value="flat" <?= $invoice['invoice_discount_type'] === 'flat' ? 'selected' : '' ?>>₹</option>
                 <option value="percentage" <?= $invoice['invoice_discount_type'] === 'percentage' ? 'selected' : '' ?>>%</option>
               </select>
+            </div>
+            <div style="font-size: 11px; color: var(--slate-500); margin-top: 3px;">
+              Pre-tax discount (₹ or %). Post-tax round-off or discount can be manually entered in Rounding Adjustment.
             </div>
           </div>
           <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 8px;">
@@ -259,9 +262,15 @@
           <span>Total Tax:</span>
           <span id="sum_tax_total" style="font-weight: 600;">₹ 0.00</span>
         </div>
-        <div class="totals-row">
-          <span>Rounding Adjustment:</span>
-          <span id="sum_round_off">₹ 0.00</span>
+        <div class="totals-row" style="align-items: center; justify-content: space-between;">
+          <div>
+            <div style="font-weight: 500;">Rounding Adjustment / Discount:</div>
+            <div style="font-size: 11px; color: var(--slate-400);">Manual input (₹) or click Auto</div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <input type="number" step="0.01" name="rounding_adjustment" id="rounding_adjustment" class="form-control form-control-sm text-right" style="width: 100px; font-weight: 600; padding: 4px 8px; height: 30px;" value="<?= e(number_format((float)$invoice['rounding_adjustment'], 2, '.', '')) ?>" data-manual="<?= abs((float)$invoice['rounding_adjustment']) > 0 ? 'true' : 'false' ?>">
+            <button type="button" id="btn_auto_round" class="btn <?= abs((float)$invoice['rounding_adjustment']) > 0 ? 'btn-secondary' : 'btn-primary' ?> btn-sm" style="padding: 2px 8px; font-size: 11px; height: 30px;" title="Reset to auto round off">Auto</button>
+          </div>
         </div>
         <div class="totals-row final">
           <span>Total Amount:</span>

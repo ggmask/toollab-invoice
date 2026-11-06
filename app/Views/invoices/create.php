@@ -239,6 +239,9 @@
                 <option value="percentage">%</option>
               </select>
             </div>
+            <div style="font-size: 11px; color: var(--slate-500); margin-top: 3px;">
+              Pre-tax discount (₹ or %). Post-tax round-off or discount can be manually entered in Rounding Adjustment.
+            </div>
           </div>
 
           <!-- Additional Charges -->
@@ -318,9 +321,15 @@
           <span id="sum_tax_total" style="font-weight: 600;">₹ 0.00</span>
         </div>
 
-        <div class="totals-row">
-          <span>Rounding Adjustment:</span>
-          <span id="sum_round_off" style="color: var(--slate-500);">₹ 0.00</span>
+        <div class="totals-row" style="align-items: center; justify-content: space-between;">
+          <div>
+            <div style="font-weight: 500;">Rounding Adjustment / Discount:</div>
+            <div style="font-size: 11px; color: var(--slate-400);">Manual input (₹) or click Auto</div>
+          </div>
+          <div style="display: flex; align-items: center; gap: 6px;">
+            <input type="number" step="0.01" name="rounding_adjustment" id="rounding_adjustment" class="form-control form-control-sm text-right" style="width: 100px; font-weight: 600; padding: 4px 8px; height: 30px;" value="0.00" data-manual="false">
+            <button type="button" id="btn_auto_round" class="btn btn-primary btn-sm" style="padding: 2px 8px; font-size: 11px; height: 30px;" title="Reset to auto round off">Auto</button>
+          </div>
         </div>
 
         <div class="totals-row final">

@@ -42,11 +42,15 @@ function initLineItemsCalculator() {
   const addBtn = document.getElementById('add-line-item-btn');
   const posCodeSelect = document.getElementById('pos_state_code');
   const supplierStateCode = document.getElementById('supplier_state_code')?.value || '';
-  const invDiscountValue = document.getElementById('invoice_discount_value');
-  const invDiscountType = document.getElementById('invoice_discount_type');
+  const invDiscountValue = document.getElementById('invoice_discount_value') || document.getElementById('estimate_discount_value');
+  const invDiscountType = document.getElementById('invoice_discount_type') || document.getElementById('estimate_discount_type');
   const additionalChargesInput = document.getElementById('additional_charges');
   const additionalChargesGstRateSelect = document.getElementById('additional_charges_gst_rate');
   const reverseChargeCheckbox = document.getElementById('is_reverse_charge');
+  const roundingAdjustmentInput = document.getElementById('rounding_adjustment');
+  const btnAutoRound = document.getElementById('btn_auto_round');
+
+  let isManualRounding = roundingAdjustmentInput ? (roundingAdjustmentInput.dataset.manual === 'true') : false;
 
   function calculateAll() {
     const rows = container.querySelectorAll('.line-item-row');
@@ -173,8 +177,33 @@ function initLineItemsCalculator() {
       ? Math.round((finalTaxableTotal + customerPayableTax) * 100) / 100
       : Math.round((finalTaxableTotal + customerPayableTax + addCharges) * 100) / 100;
 
-    const finalTotal = Math.round(baseTotal);
-    const roundOff = Math.round((finalTotal - baseTotal) * 100) / 100;
+    let roundOff = 0;
+    let finalTotal = 0;
+
+    if (roundingAdjustmentInput) {
+      if (!isManualRounding) {
+        finalTotal = Math.round(baseTotal);
+        roundOff = Math.round((finalTotal - baseTotal) * 100) / 100;
+        roundingAdjustmentInput.value = roundOff.toFixed(2);
+        if (btnAutoRound) {
+          btnAutoRound.className = 'btn btn-primary btn-sm';
+          btnAutoRound.textContent = 'Auto';
+          btnAutoRound.title = 'Auto round-off active. Click or edit input to override.';
+        }
+      } else {
+        const parsed = parseFloat(roundingAdjustmentInput.value);
+        roundOff = isNaN(parsed) ? 0 : Math.round(parsed * 100) / 100;
+        finalTotal = Math.round((baseTotal + roundOff) * 100) / 100;
+        if (btnAutoRound) {
+          btnAutoRound.className = 'btn btn-secondary btn-sm';
+          btnAutoRound.textContent = 'Auto';
+          btnAutoRound.title = 'Manual round-off active. Click to reset to auto round.';
+        }
+      }
+    } else {
+      finalTotal = Math.round(baseTotal);
+      roundOff = Math.round((finalTotal - baseTotal) * 100) / 100;
+    }
 
     // Update DOM summary cards
     setText('sum_subtotal_gross', formatCurrencyJs(subtotalGross));
@@ -275,6 +304,20 @@ function initLineItemsCalculator() {
   if (additionalChargesInput) additionalChargesInput.addEventListener('input', calculateAll);
   if (additionalChargesGstRateSelect) additionalChargesGstRateSelect.addEventListener('change', calculateAll);
   if (reverseChargeCheckbox) reverseChargeCheckbox.addEventListener('change', calculateAll);
+
+  if (roundingAdjustmentInput) {
+    roundingAdjustmentInput.addEventListener('input', () => {
+      isManualRounding = true;
+      calculateAll();
+    });
+  }
+
+  if (btnAutoRound) {
+    btnAutoRound.addEventListener('click', () => {
+      isManualRounding = false;
+      calculateAll();
+    });
+  }
 
   // Add line item
   if (addBtn) {

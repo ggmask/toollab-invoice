@@ -187,4 +187,64 @@ final class InvoiceCalculationServiceTest extends TestCase
         $this->assertEquals(99.00, $slab18['cgst_amount']);
         $this->assertEquals(99.00, $slab18['sgst_amount']);
     }
+
+    public function testManualRoundingAdjustment(): void
+    {
+        $items = [
+            [
+                'name' => 'Custom Item',
+                'quantity' => 1,
+                'unit_price' => 1000.40,
+                'gst_rate' => 18.0,
+            ]
+        ];
+
+        // 1000.40 base + 180.08 GST (90.04 CGST + 90.04 SGST) = 1180.48 tentative total
+        // 1. Default auto-rounding to nearest rupee
+        $resAuto = InvoiceCalculationService::calculate($items, 'intra_state');
+        $this->assertEquals(-0.48, $resAuto['rounding_adjustment']);
+        $this->assertEquals(1180.00, $resAuto['total_amount']);
+
+        // 2. Manual rounding set to 0.00 (exact paise, no round-off)
+        $resExact = InvoiceCalculationService::calculate(
+            $items,
+            'intra_state',
+            'flat',
+            0.0,
+            0.0,
+            0.0,
+            false,
+            0.00
+        );
+        $this->assertEquals(0.00, $resExact['rounding_adjustment']);
+        $this->assertEquals(1180.48, $resExact['total_amount']);
+
+        // 3. Manual round-off discount (e.g. -10.48 to make total 1170.00)
+        $resDisc = InvoiceCalculationService::calculate(
+            $items,
+            'intra_state',
+            'flat',
+            0.0,
+            0.0,
+            0.0,
+            false,
+            -10.48
+        );
+        $this->assertEquals(-10.48, $resDisc['rounding_adjustment']);
+        $this->assertEquals(1170.00, $resDisc['total_amount']);
+
+        // 4. Manual positive round-off adjustment (+0.52 to make total 1181.00)
+        $resAdd = InvoiceCalculationService::calculate(
+            $items,
+            'intra_state',
+            'flat',
+            0.0,
+            0.0,
+            0.0,
+            false,
+            0.52
+        );
+        $this->assertEquals(0.52, $resAdd['rounding_adjustment']);
+        $this->assertEquals(1181.00, $resAdd['total_amount']);
+    }
 }

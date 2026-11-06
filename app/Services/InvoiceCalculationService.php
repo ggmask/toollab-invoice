@@ -15,7 +15,8 @@ class InvoiceCalculationService
         float $discountValue = 0.0,
         float $additionalCharges = 0.0,
         float $additionalChargesGstRate = 0.0,
-        bool $isReverseCharge = false
+        bool $isReverseCharge = false,
+        ?float $manualRoundingAdjustment = null
     ): array {
         $calculatedItems = [];
         $subtotalGross = 0.0;
@@ -237,9 +238,14 @@ class InvoiceCalculationService
             $subtotalWithTaxAndCharges = round($totalTaxable + $customerTaxPayable + $additionalCharges, 2);
         }
 
-        // Document-level rounding to nearest whole rupee
-        $finalTotal = round($subtotalWithTaxAndCharges);
-        $roundingAdj = round($finalTotal - $subtotalWithTaxAndCharges, 2);
+        // Document-level rounding: manual override or auto-round to nearest whole rupee
+        if ($manualRoundingAdjustment !== null) {
+            $roundingAdj = round($manualRoundingAdjustment, 2);
+            $finalTotal = round($subtotalWithTaxAndCharges + $roundingAdj, 2);
+        } else {
+            $finalTotal = round($subtotalWithTaxAndCharges);
+            $roundingAdj = round($finalTotal - $subtotalWithTaxAndCharges, 2);
+        }
 
         return [
             'items' => $calculatedItems,

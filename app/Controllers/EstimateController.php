@@ -155,8 +155,11 @@ class EstimateController
         $discountValue = max(0.0, (float)$request->post('estimate_discount_value', 0));
         $additionalCharges = max(0.0, (float)$request->post('additional_charges', 0));
         $additionalChargesGstRate = max(0.0, (float)$request->post('additional_charges_gst_rate', 0));
+        $manualRounding = ($request->has('rounding_adjustment') && trim((string)$request->post('rounding_adjustment')) !== '')
+            ? (float)$request->post('rounding_adjustment')
+            : null;
 
-        $calc = InvoiceCalculationService::calculate($rawItems, $supplyType, $discountType, $discountValue, $additionalCharges, $additionalChargesGstRate);
+        $calc = InvoiceCalculationService::calculate($rawItems, $supplyType, $discountType, $discountValue, $additionalCharges, $additionalChargesGstRate, false, $manualRounding);
         $fy = FinancialYear::forDate($estimateDate);
 
         try {
@@ -443,8 +446,11 @@ class EstimateController
         $discountValue = max(0.0, (float)$request->post('estimate_discount_value', 0));
         $additionalCharges = max(0.0, (float)$request->post('additional_charges', 0));
         $additionalChargesGstRate = max(0.0, (float)$request->post('additional_charges_gst_rate', 0));
+        $manualRounding = ($request->has('rounding_adjustment') && trim((string)$request->post('rounding_adjustment')) !== '')
+            ? (float)$request->post('rounding_adjustment')
+            : null;
 
-        $calc = InvoiceCalculationService::calculate($rawItems, $supplyType, $discountType, $discountValue, $additionalCharges, $additionalChargesGstRate);
+        $calc = InvoiceCalculationService::calculate($rawItems, $supplyType, $discountType, $discountValue, $additionalCharges, $additionalChargesGstRate, false, $manualRounding);
         $fy = FinancialYear::forDate($estimateDate);
 
         Database::transaction(function (PDO $pdo) use (
