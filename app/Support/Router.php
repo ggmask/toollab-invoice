@@ -47,7 +47,7 @@ class Router
         $path = $request->path();
 
         foreach (self::$routes as $route) {
-            if ($route['method'] !== $method) {
+            if ($route['method'] !== $method && !($method === 'HEAD' && $route['method'] === 'GET')) {
                 continue;
             }
 
