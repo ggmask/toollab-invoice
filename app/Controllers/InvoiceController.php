@@ -447,6 +447,16 @@ class InvoiceController
         $pStmt->execute([$id]);
         $payments = $pStmt->fetchAll(PDO::FETCH_ASSOC);
 
+        // Fetch credit notes issued against this invoice
+        $cnStmt = $pdo->prepare("
+            SELECT id, credit_note_number, credit_note_date, total_amount, applied_amount, status, reason, reason_description, created_at
+            FROM credit_notes
+            WHERE invoice_id = ? AND business_id = ?
+            ORDER BY credit_note_date DESC, id DESC
+        ");
+        $cnStmt->execute([$id, $businessId]);
+        $creditNotes = $cnStmt->fetchAll(PDO::FETCH_ASSOC);
+
         $bankDetails = !empty($invoice['bank_details']) ? json_decode($invoice['bank_details'], true) : [];
 
         return new Response(View::render('invoices.show', [
@@ -454,6 +464,7 @@ class InvoiceController
             'invoice' => $invoice,
             'items' => $items,
             'payments' => $payments,
+            'creditNotes' => $creditNotes,
             'bankDetails' => $bankDetails,
             'business' => $business,
         ]));

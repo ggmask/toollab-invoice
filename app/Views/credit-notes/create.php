@@ -1,7 +1,12 @@
 <div class="page-header">
   <div>
     <div style="font-size: 12px; color: var(--slate-500); margin-bottom: 4px;">
-      <a href="<?= url('/credit-notes') ?>" style="color: var(--slate-500);">&larr; Credit Notes</a> / New
+      <?php if (!empty($linkedInvoice)): ?>
+        <a href="<?= url('/invoices/' . $linkedInvoice['id']) ?>" style="color: var(--slate-500);">&larr; Back to Invoice #<?= e($linkedInvoice['invoice_number']) ?></a>
+      <?php else: ?>
+        <a href="<?= url('/invoices') ?>" style="color: var(--slate-500);">&larr; Back to Invoices</a>
+      <?php endif; ?>
+      / New Credit Note
     </div>
     <h1 class="page-title">Issue Credit Note</h1>
     <div class="page-description">Create an official credit note in compliance with Section 34 of the CGST Act, 2017.</div>
@@ -188,7 +193,7 @@
         </div>
 
         <div style="margin-top: 20px; display: flex; gap: 10px;">
-          <a href="<?= url('/credit-notes') ?>" class="btn btn-secondary" style="flex: 1; text-align: center;">Cancel</a>
+          <a href="<?= !empty($linkedInvoice) ? url('/invoices/' . $linkedInvoice['id']) : url('/invoices') ?>" class="btn btn-secondary" style="flex: 1; text-align: center;">Cancel</a>
           <button type="submit" class="btn btn-primary" style="flex: 2;">Issue Credit Note</button>
         </div>
       </div>

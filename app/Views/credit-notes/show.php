@@ -1,7 +1,12 @@
 <div class="page-header">
   <div>
     <div style="font-size: 12px; color: var(--slate-500); margin-bottom: 4px;">
-      <a href="<?= url('/credit-notes') ?>" style="color: var(--slate-500);">&larr; Credit Notes</a> / <?= e($creditNote['credit_note_number']) ?>
+      <?php if (!empty($creditNote['invoice_id'])): ?>
+        <a href="<?= url('/invoices/' . $creditNote['invoice_id']) ?>" style="color: var(--slate-500);">&larr; Back to Invoice #<?= e($creditNote['original_invoice_number']) ?></a>
+      <?php else: ?>
+        <a href="<?= url('/invoices') ?>" style="color: var(--slate-500);">&larr; Back to Invoices</a>
+      <?php endif; ?>
+      / <?= e($creditNote['credit_note_number']) ?>
     </div>
     <div style="display: flex; align-items: center; gap: 12px;">
       <h1 class="page-title" style="margin: 0;">Credit Note #<?= e($creditNote['credit_note_number']) ?></h1>

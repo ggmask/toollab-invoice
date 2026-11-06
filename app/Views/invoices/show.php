@@ -55,7 +55,10 @@
 
     <?php if (in_array($invoice['status'], ['issued', 'partially_paid', 'paid'])): ?>
       <a href="<?= url('/credit-notes/create?invoice_id=' . $invoice['id']) ?>" class="btn btn-secondary btn-sm" title="Issue Credit Note under Section 34">
-        Credit Note
+        <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 14l6-6m0 0l-6-6m6 6H3"/>
+        </svg>
+        Issue Credit Note
       </a>
     <?php endif; ?>
 
@@ -303,6 +306,23 @@
           <span style="color: var(--primary);"><?= format_currency($invoice['total_amount']) ?></span>
         </div>
 
+        <?php 
+          $appliedCredit = 0.0;
+          if (!empty($creditNotes)) {
+              foreach ($creditNotes as $cn) {
+                  if ($cn['status'] !== 'void') {
+                      $appliedCredit += (float)($cn['applied_amount'] ?? $cn['total_amount']);
+                  }
+              }
+          }
+        ?>
+        <?php if ($appliedCredit > 0): ?>
+          <div class="totals-row" style="color: var(--danger); font-size: 13px; margin-top: 4px;">
+            <span>Credit Notes Applied:</span>
+            <span style="font-weight: 600;">-<?= format_currency($appliedCredit) ?></span>
+          </div>
+        <?php endif; ?>
+
         <div class="totals-row" style="margin-top: 10px; border-top: 1px solid var(--slate-200); padding-top: 8px;">
           <span>Paid Amount:</span>
           <span style="color: var(--success); font-weight: 600;"><?= format_currency($invoice['paid_amount']) ?></span>
@@ -370,6 +390,99 @@
                 <a href="<?= url('/payments/' . $p['payment_id']) ?>" class="btn btn-secondary btn-sm">
                   View Receipt
                 </a>
+              </td>
+            </tr>
+          <?php endforeach; ?>
+        <?php endif; ?>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Credit Notes Issued Against This Invoice (Section 34) -->
+<div class="card" style="margin-top: 24px;">
+  <div class="card-header">
+    <div>
+      <h2 class="card-title">Credit Notes (CGST Section 34)</h2>
+      <div style="font-size: 12px; color: var(--slate-500); margin-top: 2px;">
+        Sales returns, rate adjustments, and post-sale credits issued against this invoice.
+      </div>
+    </div>
+    <?php if (in_array($invoice['status'], ['issued', 'partially_paid', 'paid'])): ?>
+      <a href="<?= url('/credit-notes/create?invoice_id=' . $invoice['id']) ?>" class="btn btn-secondary btn-sm">
+        + Issue Credit Note
+      </a>
+    <?php endif; ?>
+  </div>
+  <div class="table-responsive">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>Credit Note #</th>
+          <th>Date</th>
+          <th>Reason</th>
+          <th class="text-right">Credit Value</th>
+          <th class="text-center">Status</th>
+          <th class="text-right">Actions</th>
+        </tr>
+      </thead>
+      <tbody>
+        <?php if (empty($creditNotes)): ?>
+          <tr>
+            <td colspan="6" class="empty-state">
+              No credit notes have been issued against this invoice.
+              <?php if (in_array($invoice['status'], ['issued', 'partially_paid', 'paid'])): ?>
+                <div style="margin-top: 8px;">
+                  <a href="<?= url('/credit-notes/create?invoice_id=' . $invoice['id']) ?>" class="btn btn-secondary btn-sm">
+                    Issue Credit Note
+                  </a>
+                </div>
+              <?php endif; ?>
+            </td>
+          </tr>
+        <?php else: ?>
+          <?php foreach ($creditNotes as $cn): ?>
+            <tr>
+              <td>
+                <a href="<?= url('/credit-notes/' . $cn['id']) ?>" style="font-weight: 600;">
+                  <?= e($cn['credit_note_number']) ?>
+                </a>
+              </td>
+              <td><?= format_date($cn['credit_note_date']) ?></td>
+              <td>
+                <?= e(ucwords(str_replace('_', ' ', $cn['reason'] ?? 'Sales Return'))) ?>
+                <?php if (!empty($cn['reason_description'])): ?>
+                  <div style="font-size: 11px; color: var(--slate-500);"><?= e($cn['reason_description']) ?></div>
+                <?php endif; ?>
+              </td>
+              <td class="text-right" style="font-weight: 600; color: var(--danger);">
+                -<?= format_currency($cn['total_amount']) ?>
+              </td>
+              <td class="text-center">
+                <?php
+                  $badgeClass = match($cn['status']) {
+                    'applied' => 'badge-success',
+                    'issued' => 'badge-info',
+                    'void' => 'badge-danger',
+                    default => 'badge-secondary',
+                  };
+                ?>
+                <span class="badge <?= $badgeClass ?>">
+                  <?= strtoupper($cn['status']) ?>
+                </span>
+              </td>
+              <td class="text-right">
+                <div style="display: inline-flex; gap: 6px;">
+                  <a href="<?= url('/credit-notes/' . $cn['id']) ?>" class="btn btn-secondary btn-sm">
+                    View
+                  </a>
+                  <a href="<?= url('/credit-notes/' . $cn['id'] . '/print') ?>" target="_blank" class="btn btn-secondary btn-sm" title="Print">
+                    Print
+                  </a>
+                  <a href="<?= url('/credit-notes/' . $cn['id'] . '/download') ?>" class="btn btn-secondary btn-sm" title="Download PDF">
+                    PDF
+                  </a>
+                </div>
               </td>
             </tr>
           <?php endforeach; ?>
