@@ -62,3 +62,4 @@ final class RequestTest extends TestCase
         $this->assertEquals('/login', $req->path());
     }
 }
+
