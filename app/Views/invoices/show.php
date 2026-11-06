@@ -33,10 +33,16 @@
       <a href="<?= url('/invoices/' . $invoice['id'] . '/edit') ?>" class="btn btn-secondary btn-sm">
         Edit Draft
       </a>
-      <form action="<?= url('/invoices/' . $invoice['id'] . '/issue') ?>" method="POST" style="margin: 0;" onsubmit="return confirm('Officially issue this invoice? Document numbering and financial details will be locked.');">
+      <form action="<?= url('/invoices/' . $invoice['id'] . '/issue') ?>" method="POST" style="margin: 0;" onsubmit="return confirm('Officially issue this invoice? An official tax invoice number will be assigned.');">
         <?= csrf_field() ?>
         <button type="submit" class="btn btn-primary btn-sm">
           Issue Invoice
+        </button>
+      </form>
+      <form action="<?= url('/invoices/' . $invoice['id'] . '/delete') ?>" method="POST" style="margin: 0;" onsubmit="return confirm('Permanently delete this draft invoice? This action cannot be undone.');">
+        <?= csrf_field() ?>
+        <button type="submit" class="btn btn-secondary btn-sm" style="color: var(--danger);">
+          Delete Draft
         </button>
       </form>
     <?php endif; ?>
@@ -47,6 +53,12 @@
       </a>
     <?php endif; ?>
 
+    <?php if (in_array($invoice['status'], ['issued', 'partially_paid', 'paid'])): ?>
+      <a href="<?= url('/credit-notes/create?invoice_id=' . $invoice['id']) ?>" class="btn btn-secondary btn-sm" title="Issue Credit Note under Section 34">
+        Credit Note
+      </a>
+    <?php endif; ?>
+
     <form action="<?= url('/invoices/' . $invoice['id'] . '/duplicate') ?>" method="POST" style="margin: 0;">
       <?= csrf_field() ?>
       <button type="submit" class="btn btn-secondary btn-sm" title="Duplicate into a new draft">
@@ -54,7 +66,7 @@
       </button>
     </form>
 
-    <?php if ($invoice['status'] !== 'void' && $invoice['paid_amount'] == 0): ?>
+    <?php if ($invoice['status'] !== 'void' && $invoice['status'] !== 'draft' && $invoice['paid_amount'] == 0): ?>
       <button type="button" class="btn btn-secondary btn-sm" style="color: var(--danger);" onclick="openVoidModal()">
         Void
       </button>

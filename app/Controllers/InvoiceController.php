@@ -122,7 +122,13 @@ class InvoiceController
 
         $states = Config::get('constants.gst_states', []);
         $units = Config::get('constants.units', []);
-        $gstRates = Config::get('constants.gst_rates', []);
+        $defaultGstRates = Config::get('constants.gst_rates', [0, 5, 12, 18, 28]);
+
+        $trStmt = $pdo->prepare("SELECT rate FROM tax_rates WHERE business_id = ? AND is_active = 1");
+        $trStmt->execute([$businessId]);
+        $customRates = $trStmt->fetchAll(PDO::FETCH_COLUMN);
+        $gstRates = array_unique(array_merge($defaultGstRates, array_map('floatval', $customRates)));
+        sort($gstRates);
         $paymentTerms = Config::get('constants.payment_terms', []);
 
         $nextInvoiceNumber = DocumentNumberService::previewNextNumber(
@@ -193,6 +199,8 @@ class InvoiceController
         $discountValue = max(0.0, (float)$request->post('invoice_discount_value', 0));
         $additionalCharges = max(0.0, (float)$request->post('additional_charges', 0));
         $additionalChargesLabel = trim($request->post('additional_charges_label', 'Shipping / Other Charges'));
+        $additionalChargesGstRate = max(0.0, (float)$request->post('additional_charges_gst_rate', 0));
+        $isReverseCharge = (bool)$request->post('is_reverse_charge', false);
 
         // Calculation Service
         $calc = InvoiceCalculationService::calculate(
@@ -200,7 +208,9 @@ class InvoiceController
             $supplyType,
             $discountType,
             $discountValue,
-            $additionalCharges
+            $additionalCharges,
+            $additionalChargesGstRate,
+            $isReverseCharge
         );
 
         $status = ($submitAction === 'issue') ? 'issued' : 'draft';
@@ -221,10 +231,7 @@ class InvoiceController
                     $issuedAt = date('Y-m-d H:i:s');
                     $issuedBy = $userId;
                 } else {
-                    $invoiceNumber = trim($request->post('invoice_number', ''));
-                    if (empty($invoiceNumber)) {
-                        $invoiceNumber = DocumentNumberService::previewNextNumber($businessId, 'invoice', $prefix, $padding, $fy);
-                    }
+                    $invoiceNumber = DocumentNumberService::generateDraftNumber($businessId, $padding, $fy);
                     $issuedAt = null;
                     $issuedBy = null;
                 }
@@ -486,7 +493,13 @@ class InvoiceController
 
         $states = Config::get('constants.gst_states', []);
         $units = Config::get('constants.units', []);
-        $gstRates = Config::get('constants.gst_rates', []);
+        $defaultGstRates = Config::get('constants.gst_rates', [0, 5, 12, 18, 28]);
+
+        $trStmt = $pdo->prepare("SELECT rate FROM tax_rates WHERE business_id = ? AND is_active = 1");
+        $trStmt->execute([$businessId]);
+        $customRates = $trStmt->fetchAll(PDO::FETCH_COLUMN);
+        $gstRates = array_unique(array_merge($defaultGstRates, array_map('floatval', $customRates)));
+        sort($gstRates);
         $paymentTerms = Config::get('constants.payment_terms', []);
 
         return new Response(View::render('invoices.edit', [
@@ -545,8 +558,18 @@ class InvoiceController
         $discountValue = max(0.0, (float)$request->post('invoice_discount_value', 0));
         $additionalCharges = max(0.0, (float)$request->post('additional_charges', 0));
         $additionalChargesLabel = trim($request->post('additional_charges_label', 'Shipping / Other Charges'));
+        $additionalChargesGstRate = max(0.0, (float)$request->post('additional_charges_gst_rate', 0));
+        $isReverseCharge = (bool)$request->post('is_reverse_charge', false);
 
-        $calc = InvoiceCalculationService::calculate($rawItems, $supplyType, $discountType, $discountValue, $additionalCharges);
+        $calc = InvoiceCalculationService::calculate(
+            $rawItems,
+            $supplyType,
+            $discountType,
+            $discountValue,
+            $additionalCharges,
+            $additionalChargesGstRate,
+            $isReverseCharge
+        );
         $fy = FinancialYear::forDate($issueDate);
 
         Database::transaction(function (PDO $pdo) use (
@@ -772,6 +795,42 @@ class InvoiceController
         return Response::redirect(url('/invoices/' . $id));
     }
 
+    public function destroy(Request $request, string $id): Response
+    {
+        $business = Session::get('business');
+        $businessId = (int)$business['id'];
+        $pdo = Database::pdo();
+
+        $stmt = $pdo->prepare("SELECT * FROM invoices WHERE id = ? AND business_id = ?");
+        $stmt->execute([$id, $businessId]);
+        $invoice = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$invoice) {
+            Session::flash('error', 'Invoice not found.');
+            return Response::redirect(url('/invoices'));
+        }
+
+        if ($invoice['status'] !== 'draft') {
+            Session::flash('error', 'Only draft invoices can be deleted. Issued invoices must be preserved or marked as void.');
+            return Response::redirect(url('/invoices/' . $id));
+        }
+
+        Database::transaction(function (PDO $pdo) use ($id, $businessId, $invoice) {
+            $delItems = $pdo->prepare("DELETE FROM invoice_items WHERE invoice_id = ?");
+            $delItems->execute([$id]);
+
+            $delInv = $pdo->prepare("DELETE FROM invoices WHERE id = ? AND business_id = ?");
+            $delInv->execute([$id, $businessId]);
+
+            AuditService::log('invoice.deleted', 'invoice', (int)$id, [
+                'invoice_number' => $invoice['invoice_number']
+            ]);
+        });
+
+        Session::flash('success', "Draft invoice {$invoice['invoice_number']} has been permanently deleted.");
+        return Response::redirect(url('/invoices'));
+    }
+
     public function duplicate(Request $request, string $id): Response
     {
         $business = Session::get('business');
@@ -798,7 +857,7 @@ class InvoiceController
         $newInvId = Database::transaction(function (PDO $pdo) use ($businessId, $orig, $items, $today, $dueDate, $fy, $business) {
             $prefix = $business['invoice_prefix'] ?? 'INV';
             $padding = (int)($business['number_padding'] ?? 4);
-            $newNumber = DocumentNumberService::previewNextNumber($businessId, 'invoice', $prefix, $padding, $fy);
+            $newNumber = DocumentNumberService::generateDraftNumber($businessId, $padding, $fy);
 
             $uuid = sprintf('%04x%04x-%04x-%04x-%04x-%04x%04x%04x',
                 mt_rand(0, 0xffff), mt_rand(0, 0xffff), mt_rand(0, 0xffff),
@@ -897,8 +956,8 @@ class InvoiceController
         $iStmt->execute([$id]);
         $items = $iStmt->fetchAll(PDO::FETCH_ASSOC);
 
-        $cStmt = $pdo->prepare("SELECT * FROM customers WHERE id = ?");
-        $cStmt->execute([$invoice['customer_id']]);
+        $cStmt = $pdo->prepare("SELECT * FROM customers WHERE id = ? AND business_id = ?");
+        $cStmt->execute([$invoice['customer_id'], $businessId]);
         $customer = $cStmt->fetch(PDO::FETCH_ASSOC) ?: [];
 
         $pdfContent = PdfService::invoicePdf($invoice, $items, $business, $customer);
@@ -926,8 +985,8 @@ class InvoiceController
         $iStmt->execute([$id]);
         $items = $iStmt->fetchAll(PDO::FETCH_ASSOC);
 
-        $cStmt = $pdo->prepare("SELECT * FROM customers WHERE id = ?");
-        $cStmt->execute([$invoice['customer_id']]);
+        $cStmt = $pdo->prepare("SELECT * FROM customers WHERE id = ? AND business_id = ?");
+        $cStmt->execute([$invoice['customer_id'], $businessId]);
         $customer = $cStmt->fetch(PDO::FETCH_ASSOC) ?: [];
 
         return new Response(View::render('invoices.print', [

@@ -168,7 +168,9 @@ class AuthController
                     'status' => 'active',
                 ]);
 
-                $bFetch = $pdo->query("SELECT * FROM businesses WHERE id = {$businessId}")->fetch(PDO::FETCH_ASSOC);
+                $bFetchStmt = $pdo->prepare("SELECT * FROM businesses WHERE id = ?");
+                $bFetchStmt->execute([$businessId]);
+                $bFetch = $bFetchStmt->fetch(PDO::FETCH_ASSOC);
                 $bFetch['role'] = 'owner';
                 Session::set('business', $bFetch);
 

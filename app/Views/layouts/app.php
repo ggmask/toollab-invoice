@@ -7,6 +7,7 @@
   <link rel="icon" type="image/png" href="<?= asset('favicon.png') ?>">
   <link rel="manifest" href="<?= asset('manifest.json') ?>">
   <meta name="theme-color" content="#4F46E5">
+  <meta name="app-url" content="<?= rtrim(url(''), '/') ?>">
   <link rel="stylesheet" href="<?= asset('assets/css/app.css') ?>">
 </head>
 <body>

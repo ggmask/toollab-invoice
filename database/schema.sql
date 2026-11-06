@@ -59,6 +59,7 @@ CREATE TABLE `businesses` (
   `invoice_prefix` VARCHAR(20) NOT NULL DEFAULT 'INV',
   `estimate_prefix` VARCHAR(20) NOT NULL DEFAULT 'EST',
   `payment_prefix` VARCHAR(20) NOT NULL DEFAULT 'PAY',
+  `credit_note_prefix` VARCHAR(20) NOT NULL DEFAULT 'CN',
   `number_padding` INT UNSIGNED NOT NULL DEFAULT 4,
   `default_payment_terms` VARCHAR(100) NOT NULL DEFAULT 'Net 15',
   `default_due_days` INT UNSIGNED NOT NULL DEFAULT 15,
@@ -148,7 +149,7 @@ CREATE TABLE `products` (
 CREATE TABLE `document_sequences` (
   `id` BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
   `business_id` BIGINT UNSIGNED NOT NULL,
-  `document_type` ENUM('invoice', 'estimate', 'payment') NOT NULL,
+  `document_type` ENUM('invoice', 'estimate', 'payment', 'draft', 'credit_note') NOT NULL,
   `financial_year` VARCHAR(10) NOT NULL,
   `last_number` INT UNSIGNED NOT NULL DEFAULT 0,
   `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -493,6 +494,70 @@ CREATE TABLE `password_resets` (
   `expires_at` DATETIME NOT NULL,
   `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   INDEX `idx_pr_email` (`email`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 18. Credit Notes
+CREATE TABLE `credit_notes` (
+  `id` BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  `business_id` BIGINT UNSIGNED NOT NULL,
+  `customer_id` BIGINT UNSIGNED NOT NULL,
+  `invoice_id` BIGINT UNSIGNED NULL,
+  `uuid` CHAR(36) NOT NULL UNIQUE,
+  `credit_note_number` VARCHAR(50) NOT NULL,
+  `financial_year` VARCHAR(10) NOT NULL,
+  `credit_note_date` DATE NOT NULL,
+  `original_invoice_number` VARCHAR(50) NOT NULL,
+  `original_invoice_date` DATE NULL,
+  `reason` ENUM('sales_return', 'deficiency_in_service', 'correction_in_invoice', 'change_in_pos', 'post_sale_discount', 'other') NOT NULL DEFAULT 'sales_return',
+  `reason_description` TEXT NULL,
+  `status` ENUM('issued', 'applied', 'void') NOT NULL DEFAULT 'issued',
+  `supply_type` ENUM('intra_state', 'inter_state') NOT NULL DEFAULT 'intra_state',
+  `taxable_value` DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
+  `cgst_amount` DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
+  `sgst_amount` DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
+  `igst_amount` DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
+  `cess_amount` DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
+  `tax_total` DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
+  `rounding_adjustment` DECIMAL(8, 2) NOT NULL DEFAULT 0.00,
+  `total_amount` DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
+  `applied_amount` DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
+  `unapplied_amount` DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
+  `notes` TEXT NULL,
+  `created_by_user_id` BIGINT UNSIGNED NOT NULL,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  `updated_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY `uk_cn_biz_num` (`business_id`, `credit_note_number`),
+  INDEX `idx_cn_biz_date` (`business_id`, `credit_note_date`),
+  INDEX `idx_cn_inv` (`invoice_id`),
+  CONSTRAINT `fk_cn_business` FOREIGN KEY (`business_id`) REFERENCES `businesses` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_cn_customer` FOREIGN KEY (`customer_id`) REFERENCES `customers` (`id`),
+  CONSTRAINT `fk_cn_invoice` FOREIGN KEY (`invoice_id`) REFERENCES `invoices` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- 19. Credit Note Items
+CREATE TABLE `credit_note_items` (
+  `id` BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+  `credit_note_id` BIGINT UNSIGNED NOT NULL,
+  `item_order` INT UNSIGNED NOT NULL DEFAULT 1,
+  `name` VARCHAR(255) NOT NULL,
+  `description` TEXT NULL,
+  `hsn_sac` VARCHAR(20) NULL,
+  `quantity` DECIMAL(12, 3) NOT NULL DEFAULT 1.000,
+  `unit` VARCHAR(20) NOT NULL DEFAULT 'PCS',
+  `unit_price` DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
+  `taxable_value` DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
+  `gst_rate` DECIMAL(5, 2) NOT NULL DEFAULT 0.00,
+  `cgst_rate` DECIMAL(5, 2) NOT NULL DEFAULT 0.00,
+  `cgst_amount` DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
+  `sgst_rate` DECIMAL(5, 2) NOT NULL DEFAULT 0.00,
+  `sgst_amount` DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
+  `igst_rate` DECIMAL(5, 2) NOT NULL DEFAULT 0.00,
+  `igst_amount` DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
+  `cess_rate` DECIMAL(5, 2) NOT NULL DEFAULT 0.00,
+  `cess_amount` DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
+  `total_tax` DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
+  `line_total` DECIMAL(15, 2) NOT NULL DEFAULT 0.00,
+  CONSTRAINT `fk_cni_credit_note` FOREIGN KEY (`credit_note_id`) REFERENCES `credit_notes` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 SET FOREIGN_KEY_CHECKS = 1;

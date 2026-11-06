@@ -145,12 +145,13 @@ class ReportController
 
         $startDate = $request->get('start_date', date('Y-m-01'));
         $endDate = $request->get('end_date', date('Y-m-t'));
+        $section = $request->get('section', 'all');
         $export = $request->get('export', '');
 
         // Fetch invoice line items for detailed GST breakdown
         $stmt = $pdo->prepare("
             SELECT 
-                i.invoice_number, i.issue_date, i.customer_name, i.customer_gstin,
+                i.id as invoice_id, i.invoice_number, i.issue_date, i.customer_name, i.customer_gstin,
                 i.place_of_supply_state, i.place_of_supply_state_code, i.supply_type, i.is_reverse_charge,
                 ii.hsn_sac, ii.name as item_name, ii.quantity, ii.unit,
                 ii.taxable_value, ii.gst_rate, ii.cgst_amount, ii.sgst_amount, ii.igst_amount, ii.cess_amount, ii.line_total,
@@ -165,35 +166,136 @@ class ReportController
         $stmt->execute([$businessId, $startDate, $endDate]);
         $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
-        if ($export === 'csv' || $export === 'excel') {
-            AuditService::log('report.exported', 'report', null, ['type' => 'gst_sales', 'format' => $export]);
-            $headers = ['Invoice #', 'Date', 'Customer Name', 'GSTIN', 'Place of Supply', 'Reverse Charge', 'HSN/SAC', 'Description', 'Qty', 'Unit', 'Taxable Value', 'GST Rate %', 'CGST', 'SGST', 'IGST', 'Cess', 'Line Total'];
-            $data = [];
-            foreach ($rows as $r) {
-                $data[] = [
-                    $r['invoice_number'],
-                    $r['issue_date'],
-                    $r['customer_name'],
-                    $r['customer_gstin'] ?: 'Unregistered',
-                    ($r['place_of_supply_state_code'] ? $r['place_of_supply_state_code'] . '-' : '') . $r['place_of_supply_state'],
-                    $r['is_reverse_charge'] ? 'Yes' : 'No',
-                    $r['hsn_sac'],
-                    $r['item_name'],
-                    (float)$r['quantity'],
-                    $r['unit'],
-                    (float)$r['taxable_value'],
-                    (float)$r['gst_rate'] . '%',
-                    (float)$r['cgst_amount'],
-                    (float)$r['sgst_amount'],
-                    (float)$r['igst_amount'],
-                    (float)$r['cess_amount'],
-                    (float)$r['line_total'],
-                ];
+        $b2bRows = [];
+        $b2cLargeRows = [];
+        $b2cSmallRows = [];
+        $nilExemptRows = [];
+        $hsnMap = [];
+
+        foreach ($rows as $r) {
+            $hasGstin = !empty(trim($r['customer_gstin'] ?? ''));
+            $isInterState = ($r['supply_type'] === 'inter_state');
+            $invTotal = (float)$r['invoice_total'];
+            $isZeroOrExempt = ((float)$r['gst_rate'] == 0 || in_array($r['document_type'], ['bill_of_supply', 'exempt']));
+
+            if ($isZeroOrExempt) {
+                $nilExemptRows[] = $r;
             }
 
-            $filename = "gst-sales-register-{$startDate}-to-{$endDate}." . ($export === 'excel' ? 'xls' : 'csv');
+            if ($hasGstin) {
+                $b2bRows[] = $r;
+            } else {
+                if ($isInterState && $invTotal > 250000) {
+                    $b2cLargeRows[] = $r;
+                } else {
+                    $b2cSmallRows[] = $r;
+                }
+            }
+
+            // HSN Aggregation
+            $hsnCode = !empty($r['hsn_sac']) ? trim($r['hsn_sac']) : 'OTHER';
+            $uqc = !empty($r['unit']) ? strtoupper(trim($r['unit'])) : 'OTH';
+            $hKey = $hsnCode . '_' . $uqc;
+
+            if (!isset($hsnMap[$hKey])) {
+                $hsnMap[$hKey] = [
+                    'hsn_sac' => $hsnCode,
+                    'description' => $r['item_name'],
+                    'uqc' => $uqc,
+                    'total_qty' => 0.0,
+                    'total_value' => 0.0,
+                    'taxable_value' => 0.0,
+                    'igst_amount' => 0.0,
+                    'cgst_amount' => 0.0,
+                    'sgst_amount' => 0.0,
+                    'cess_amount' => 0.0,
+                    'total_tax' => 0.0,
+                ];
+            }
+            $hsnMap[$hKey]['total_qty'] += (float)$r['quantity'];
+            $hsnMap[$hKey]['total_value'] += (float)$r['line_total'];
+            $hsnMap[$hKey]['taxable_value'] += (float)$r['taxable_value'];
+            $hsnMap[$hKey]['igst_amount'] += (float)$r['igst_amount'];
+            $hsnMap[$hKey]['cgst_amount'] += (float)$r['cgst_amount'];
+            $hsnMap[$hKey]['sgst_amount'] += (float)$r['sgst_amount'];
+            $hsnMap[$hKey]['cess_amount'] += (float)$r['cess_amount'];
+            $hsnMap[$hKey]['total_tax'] += ((float)$r['igst_amount'] + (float)$r['cgst_amount'] + (float)$r['sgst_amount'] + (float)$r['cess_amount']);
+        }
+        $hsnSummary = array_values($hsnMap);
+
+        if ($export === 'csv' || $export === 'excel') {
+            AuditService::log('report.exported', 'report', null, ['type' => 'gst_sales', 'section' => $section, 'format' => $export]);
+
+            if ($section === 'hsn') {
+                $headers = ['HSN/SAC', 'Description', 'UQC', 'Total Quantity', 'Total Value', 'Taxable Value', 'Integrated Tax', 'Central Tax', 'State/UT Tax', 'Cess Amount', 'Total Tax'];
+                $data = [];
+                foreach ($hsnSummary as $h) {
+                    $data[] = [
+                        $h['hsn_sac'],
+                        $h['description'],
+                        $h['uqc'],
+                        (float)$h['total_qty'],
+                        (float)$h['total_value'],
+                        (float)$h['taxable_value'],
+                        (float)$h['igst_amount'],
+                        (float)$h['cgst_amount'],
+                        (float)$h['sgst_amount'],
+                        (float)$h['cess_amount'],
+                        (float)$h['total_tax'],
+                    ];
+                }
+                $reportTitle = 'GSTR-1 Table 12 HSN Summary';
+            } elseif ($section === 'b2b') {
+                $headers = ['GSTIN/UIN', 'Receiver Name', 'Invoice #', 'Invoice Date', 'Invoice Value', 'Place of Supply', 'Reverse Charge', 'Rate %', 'Taxable Value', 'CGST', 'SGST', 'IGST'];
+                $data = [];
+                foreach ($b2bRows as $r) {
+                    $data[] = [
+                        $r['customer_gstin'],
+                        $r['customer_name'],
+                        $r['invoice_number'],
+                        $r['issue_date'],
+                        (float)$r['invoice_total'],
+                        ($r['place_of_supply_state_code'] ? $r['place_of_supply_state_code'] . '-' : '') . $r['place_of_supply_state'],
+                        $r['is_reverse_charge'] ? 'Y' : 'N',
+                        (float)$r['gst_rate'] . '%',
+                        (float)$r['taxable_value'],
+                        (float)$r['cgst_amount'],
+                        (float)$r['sgst_amount'],
+                        (float)$r['igst_amount'],
+                    ];
+                }
+                $reportTitle = 'GSTR-1 Table 4 B2B Invoices';
+            } else {
+                $headers = ['Invoice #', 'Date', 'Customer Name', 'GSTIN', 'Place of Supply', 'Reverse Charge', 'HSN/SAC', 'Description', 'Qty', 'Unit', 'Taxable Value', 'GST Rate %', 'CGST', 'SGST', 'IGST', 'Cess', 'Line Total'];
+                $data = [];
+                $exportRows = ($section === 'b2c') ? array_merge($b2cLargeRows, $b2cSmallRows) : $rows;
+                foreach ($exportRows as $r) {
+                    $data[] = [
+                        $r['invoice_number'],
+                        $r['issue_date'],
+                        $r['customer_name'],
+                        $r['customer_gstin'] ?: 'Unregistered',
+                        ($r['place_of_supply_state_code'] ? $r['place_of_supply_state_code'] . '-' : '') . $r['place_of_supply_state'],
+                        $r['is_reverse_charge'] ? 'Yes' : 'No',
+                        $r['hsn_sac'],
+                        $r['item_name'],
+                        (float)$r['quantity'],
+                        $r['unit'],
+                        (float)$r['taxable_value'],
+                        (float)$r['gst_rate'] . '%',
+                        (float)$r['cgst_amount'],
+                        (float)$r['sgst_amount'],
+                        (float)$r['igst_amount'],
+                        (float)$r['cess_amount'],
+                        (float)$r['line_total'],
+                    ];
+                }
+                $reportTitle = 'GST Sales Register';
+            }
+
+            $filename = "gstr1-{$section}-{$startDate}-to-{$endDate}." . ($export === 'excel' ? 'xls' : 'csv');
             $content = ($export === 'excel')
-                ? ExportService::toExcelXml('GST Sales Register', $headers, $data)
+                ? ExportService::toExcelXml($reportTitle, $headers, $data)
                 : ExportService::toCsv($headers, $data);
 
             $mime = ($export === 'excel') ? 'application/vnd.ms-excel' : 'text/csv; charset=UTF-8';
@@ -203,6 +305,12 @@ class ReportController
         return new Response(View::render('reports.gst-sales', [
             'title' => 'GST Sales Register (GSTR-1 Ready)',
             'rows' => $rows,
+            'b2bRows' => $b2bRows,
+            'b2cLargeRows' => $b2cLargeRows,
+            'b2cSmallRows' => $b2cSmallRows,
+            'nilExemptRows' => $nilExemptRows,
+            'hsnSummary' => $hsnSummary,
+            'section' => $section,
             'startDate' => $startDate,
             'endDate' => $endDate,
         ]));
@@ -428,7 +536,48 @@ class ReportController
             $selectedCustomer = $custStmt->fetch(PDO::FETCH_ASSOC);
 
             if ($selectedCustomer) {
-                // Invoices
+                // Pre-period Opening Balance calculation
+                $priorInvStmt = $pdo->prepare("
+                    SELECT COALESCE(SUM(total_amount), 0) 
+                    FROM invoices 
+                    WHERE business_id = ? AND customer_id = ? AND status IN ('issued', 'partially_paid', 'paid')
+                      AND issue_date < ?
+                ");
+                $priorInvStmt->execute([$businessId, $customerId, $startDate]);
+                $priorInvoiced = (float)$priorInvStmt->fetchColumn();
+
+                $priorPayStmt = $pdo->prepare("
+                    SELECT COALESCE(SUM(amount), 0) 
+                    FROM payments 
+                    WHERE business_id = ? AND customer_id = ? AND status = 'posted'
+                      AND payment_date < ?
+                ");
+                $priorPayStmt->execute([$businessId, $customerId, $startDate]);
+                $priorPaid = (float)$priorPayStmt->fetchColumn();
+
+                $priorCnStmt = $pdo->prepare("
+                    SELECT COALESCE(SUM(total_amount), 0)
+                    FROM credit_notes
+                    WHERE business_id = ? AND customer_id = ? AND status IN ('issued', 'applied')
+                      AND credit_note_date < ?
+                ");
+                $priorCnStmt->execute([$businessId, $customerId, $startDate]);
+                $priorCreditNotes = (float)$priorCnStmt->fetchColumn();
+
+                $openingBalance = round($priorInvoiced - $priorPaid - $priorCreditNotes, 2);
+                $runningBalance = $openingBalance;
+
+                $openingRow = [
+                    'type' => 'opening_balance',
+                    'date' => $startDate,
+                    'ref_no' => 'OPENING',
+                    'description' => 'Opening Balance as of ' . date('d M Y', strtotime($startDate)),
+                    'debit' => ($openingBalance > 0) ? $openingBalance : 0.00,
+                    'credit' => ($openingBalance < 0) ? abs($openingBalance) : 0.00,
+                    'balance' => $runningBalance,
+                ];
+
+                // Invoices in period
                 $invStmt = $pdo->prepare("
                     SELECT 'invoice' as type, issue_date as date, invoice_number as ref_no, 
                            total_amount as debit, 0.00 as credit, 'Sales Invoice' as description
@@ -439,7 +588,7 @@ class ReportController
                 $invStmt->execute([$businessId, $customerId, $startDate, $endDate]);
                 $invoices = $invStmt->fetchAll(PDO::FETCH_ASSOC);
 
-                // Payments
+                // Payments in period
                 $payStmt = $pdo->prepare("
                     SELECT 'payment' as type, payment_date as date, payment_number as ref_no, 
                            0.00 as debit, amount as credit, CONCAT('Payment Receipt (', UPPER(payment_method), ')') as description
@@ -450,15 +599,28 @@ class ReportController
                 $payStmt->execute([$businessId, $customerId, $startDate, $endDate]);
                 $payments = $payStmt->fetchAll(PDO::FETCH_ASSOC);
 
-                // Merge and sort chronologically
-                $ledger = array_merge($invoices, $payments);
-                usort($ledger, fn($a, $b) => strcmp($a['date'], $b['date']));
+                // Credit Notes in period
+                $cnStmt = $pdo->prepare("
+                    SELECT 'credit_note' as type, credit_note_date as date, credit_note_number as ref_no,
+                           0.00 as debit, total_amount as credit, CONCAT('Credit Note (', UPPER(reason), ')') as description
+                    FROM credit_notes 
+                    WHERE business_id = ? AND customer_id = ? AND status IN ('issued', 'applied')
+                      AND credit_note_date BETWEEN ? AND ?
+                ");
+                $cnStmt->execute([$businessId, $customerId, $startDate, $endDate]);
+                $creditNotes = $cnStmt->fetchAll(PDO::FETCH_ASSOC);
 
-                foreach ($ledger as &$item) {
-                    $runningBalance += (float)$item['debit'] - (float)$item['credit'];
+                // Merge and sort chronologically
+                $periodTransactions = array_merge($invoices, $payments, $creditNotes);
+                usort($periodTransactions, fn($a, $b) => strcmp($a['date'], $b['date']));
+
+                foreach ($periodTransactions as &$item) {
+                    $runningBalance = round($runningBalance + (float)$item['debit'] - (float)$item['credit'], 2);
                     $item['balance'] = $runningBalance;
                 }
                 unset($item);
+
+                $ledger = array_merge([$openingRow], $periodTransactions);
             }
         }
 
@@ -495,6 +657,7 @@ class ReportController
             'startDate' => $startDate,
             'endDate' => $endDate,
             'ledger' => $ledger,
+            'openingBalance' => $openingBalance ?? 0.00,
             'closingBalance' => $runningBalance,
         ]));
     }

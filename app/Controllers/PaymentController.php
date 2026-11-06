@@ -286,7 +286,7 @@ class PaymentController
                 $invUpStmt = $pdo->prepare("
                     UPDATE invoices 
                     SET paid_amount = ?, balance_due = ?, status = ?, updated_at = NOW()
-                    WHERE id = ?
+                    WHERE id = ? AND business_id = ?
                 ");
 
                 foreach ($validAllocations as $alloc) {
@@ -296,7 +296,7 @@ class PaymentController
                     $newBalance = max(0.0, round($alloc['total_amount'] - $newPaid, 2));
                     $newStatus = ($newBalance <= 0.00) ? 'paid' : 'partially_paid';
 
-                    $invUpStmt->execute([$newPaid, $newBalance, $newStatus, $alloc['invoice_id']]);
+                    $invUpStmt->execute([$newPaid, $newBalance, $newStatus, $alloc['invoice_id'], $businessId]);
                 }
 
                 AuditService::log('payment.recorded', 'payment', $payId, [
@@ -387,20 +387,20 @@ class PaymentController
         $aStmt->execute([$id]);
         $allocations = $aStmt->fetchAll(PDO::FETCH_ASSOC);
 
-        Database::transaction(function (PDO $pdo) use ($id, $userId, $reason, $allocations, $payment) {
+        Database::transaction(function (PDO $pdo) use ($id, $businessId, $userId, $reason, $allocations, $payment) {
             // Mark payment as reversed
             $pUp = $pdo->prepare("
                 UPDATE payments 
                 SET status = 'reversed', reversal_reason = ?, reversed_at = NOW(), reversed_by_user_id = ?, updated_at = NOW()
-                WHERE id = ?
+                WHERE id = ? AND business_id = ?
             ");
-            $pUp->execute([$reason, $userId, $id]);
+            $pUp->execute([$reason, $userId, $id, $businessId]);
 
             // Revert each invoice balance
             $invUp = $pdo->prepare("
                 UPDATE invoices 
                 SET paid_amount = ?, balance_due = ?, status = ?, updated_at = NOW()
-                WHERE id = ?
+                WHERE id = ? AND business_id = ?
             ");
 
             foreach ($allocations as $alloc) {
@@ -408,7 +408,7 @@ class PaymentController
                 $revertedBalance = min((float)$alloc['total_amount'], round($alloc['total_amount'] - $revertedPaid, 2));
                 $newStatus = ($revertedPaid > 0) ? 'partially_paid' : 'issued';
 
-                $invUp->execute([$revertedPaid, $revertedBalance, $newStatus, $alloc['invoice_id']]);
+                $invUp->execute([$revertedPaid, $revertedBalance, $newStatus, $alloc['invoice_id'], $businessId]);
             }
 
             AuditService::log('payment.reversed', 'payment', (int)$id, [

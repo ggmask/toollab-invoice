@@ -1,6 +1,7 @@
 <?php
 
 use App\Controllers\AuthController;
+use App\Controllers\CreditNoteController;
 use App\Controllers\CustomerController;
 use App\Controllers\DashboardController;
 use App\Controllers\EstimateController;
@@ -50,14 +51,27 @@ Router::post('/invoices/{id}', [InvoiceController::class, 'update'], $authWithCs
 Router::post('/invoices/{id}/issue', [InvoiceController::class, 'issue'], $authWithCsrf);
 Router::post('/invoices/{id}/void', [InvoiceController::class, 'void'], $authWithCsrf);
 Router::post('/invoices/{id}/duplicate', [InvoiceController::class, 'duplicate'], $authWithCsrf);
+Router::post('/invoices/{id}/delete', [InvoiceController::class, 'destroy'], $authWithCsrf);
 Router::get('/invoices/{id}/download', [InvoiceController::class, 'downloadPdf'], $auth);
 Router::get('/invoices/{id}/print', [InvoiceController::class, 'printView'], $auth);
+
+// 2.1 Credit Notes (CGST Section 34)
+Router::get('/credit-notes', [CreditNoteController::class, 'index'], $auth);
+Router::get('/credit-notes/create', [CreditNoteController::class, 'create'], $auth);
+Router::post('/credit-notes', [CreditNoteController::class, 'store'], $authWithCsrf);
+Router::get('/credit-notes/{id}', [CreditNoteController::class, 'show'], $auth);
+Router::post('/credit-notes/{id}/void', [CreditNoteController::class, 'void'], $authWithCsrf);
+Router::get('/credit-notes/{id}/download', [CreditNoteController::class, 'downloadPdf'], $auth);
+Router::get('/credit-notes/{id}/print', [CreditNoteController::class, 'printView'], $auth);
 
 // 3. Estimates
 Router::get('/estimates', [EstimateController::class, 'index'], $auth);
 Router::get('/estimates/create', [EstimateController::class, 'create'], $auth);
 Router::post('/estimates', [EstimateController::class, 'store'], $authWithCsrf);
 Router::get('/estimates/{id}', [EstimateController::class, 'show'], $auth);
+Router::get('/estimates/{id}/edit', [EstimateController::class, 'edit'], $auth);
+Router::post('/estimates/{id}', [EstimateController::class, 'update'], $authWithCsrf);
+Router::post('/estimates/{id}/delete', [EstimateController::class, 'destroy'], $authWithCsrf);
 Router::post('/estimates/{id}/status', [EstimateController::class, 'updateStatus'], $authWithCsrf);
 Router::post('/estimates/{id}/convert', [EstimateController::class, 'convertToInvoice'], $authWithCsrf);
 Router::get('/estimates/{id}/download', [EstimateController::class, 'downloadPdf'], $auth);

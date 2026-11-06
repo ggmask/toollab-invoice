@@ -49,8 +49,50 @@ class DocumentNumberService
             $insert->execute([$businessId, $documentType, $fy, $nextNumber]);
         }
 
-        $padded = str_pad((string)$nextNumber, $padding, '0', STR_PAD_LEFT);
-        return sprintf('%s-%s-%s', $prefix, $fy, $padded);
+        return self::formatNumber($prefix, $fy, $nextNumber, $padding);
+    }
+
+    /**
+     * Format a document number respecting CGST Rule 46 (strictly <= 16 characters).
+     */
+    public static function formatNumber(
+        string $prefix,
+        string $fy,
+        int $number,
+        int $padding = 4,
+        string $separator = '-'
+    ): string {
+        $shortFy = (strlen($fy) === 7 && str_contains($fy, '-'))
+            ? substr($fy, 2, 2) . '-' . substr($fy, 5, 2)
+            : $fy;
+
+        $padded = str_pad((string)$number, $padding, '0', STR_PAD_LEFT);
+
+        // Try standard 4-digit FY: e.g. INV-2026-27-0001 (16 chars)
+        $candidate = sprintf('%s%s%s%s%s', $prefix, $separator, $fy, $separator, $padded);
+        if (strlen($candidate) <= 16) {
+            return $candidate;
+        }
+
+        // Try short 2-digit FY: e.g. TOOL-26-27-0001 (15 chars)
+        $candidateShort = sprintf('%s%s%s%s%s', $prefix, $separator, $shortFy, $separator, $padded);
+        if (strlen($candidateShort) <= 16) {
+            return $candidateShort;
+        }
+
+        // If prefix is long, format without FY to strictly guarantee <= 16 characters per Rule 46
+        return substr(sprintf('%s%s%s', $prefix, $separator, $padded), 0, 16);
+    }
+
+    /**
+     * Generate a unique sequential draft number.
+     */
+    public static function generateDraftNumber(
+        int $businessId,
+        int $padding = 4,
+        ?string $financialYear = null
+    ): string {
+        return self::generateNextNumber($businessId, 'draft', 'DFT', $padding, $financialYear);
     }
 
     /**
@@ -75,7 +117,6 @@ class DocumentNumberService
         $row = $stmt->fetch(PDO::FETCH_ASSOC);
 
         $nextNumber = $row ? ((int)$row['last_number']) + 1 : 1;
-        $padded = str_pad((string)$nextNumber, $padding, '0', STR_PAD_LEFT);
-        return sprintf('%s-%s-%s', $prefix, $fy, $padded);
+        return self::formatNumber($prefix, $fy, $nextNumber, $padding);
     }
 }

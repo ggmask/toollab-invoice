@@ -41,11 +41,60 @@ class SettingsController
         $states = Config::get('constants.gst_states', []);
         $stateName = $states[$stateCode] ?? trim($request->post('state', ''));
 
+        // Handle logo upload and removal
+        $logoUrl = $business['logo_url'] ?? null;
+
+        if ($request->post('remove_logo')) {
+            if ($logoUrl && file_exists(__DIR__ . '/../../public/' . $logoUrl)) {
+                @unlink(__DIR__ . '/../../public/' . $logoUrl);
+            }
+            $logoUrl = null;
+        }
+
+        if (isset($_FILES['logo']) && $_FILES['logo']['error'] === UPLOAD_ERR_OK) {
+            $file = $_FILES['logo'];
+            $maxBytes = 2 * 1024 * 1024; // 2MB
+            if ($file['size'] > $maxBytes) {
+                Session::flash('error', 'Logo file size exceeds 2 MB limit.');
+                return Response::redirect(url('/settings/business'));
+            }
+
+            $allowedMimes = [
+                'image/jpeg' => 'jpg',
+                'image/png' => 'png',
+                'image/webp' => 'webp',
+                'image/svg+xml' => 'svg'
+            ];
+
+            $finfo = new \finfo(FILEINFO_MIME_TYPE);
+            $mime = $finfo->file($file['tmp_name']);
+
+            if (!isset($allowedMimes[$mime])) {
+                Session::flash('error', 'Invalid logo image format. Allowed: PNG, JPG, WebP, SVG.');
+                return Response::redirect(url('/settings/business'));
+            }
+
+            $ext = $allowedMimes[$mime];
+            $filename = 'logo_' . $businessId . '_' . bin2hex(random_bytes(6)) . '.' . $ext;
+            $uploadDir = __DIR__ . '/../../public/uploads/logos/';
+            if (!is_dir($uploadDir)) {
+                @mkdir($uploadDir, 0755, true);
+            }
+
+            $destination = $uploadDir . $filename;
+            if (move_uploaded_file($file['tmp_name'], $destination)) {
+                if ($logoUrl && file_exists(__DIR__ . '/../../public/' . $logoUrl)) {
+                    @unlink(__DIR__ . '/../../public/' . $logoUrl);
+                }
+                $logoUrl = 'uploads/logos/' . $filename;
+            }
+        }
+
         $up = $pdo->prepare("
             UPDATE businesses SET
                 legal_name = ?, trade_name = ?, business_type = ?,
                 address_line1 = ?, address_line2 = ?, city = ?, state = ?, state_code = ?, pincode = ?,
-                phone = ?, email = ?, website = ?,
+                phone = ?, email = ?, website = ?, logo_url = ?,
                 bank_name = ?, bank_account_no = ?, bank_ifsc = ?, bank_branch = ?, bank_upi_id = ?,
                 signature_title = ?, updated_at = NOW()
             WHERE id = ?
@@ -64,6 +113,7 @@ class SettingsController
             trim($request->post('phone', '')),
             trim($request->post('email', '')),
             trim($request->post('website', '')),
+            $logoUrl,
             trim($request->post('bank_name', '')),
             trim($request->post('bank_account_no', '')),
             strtoupper(trim($request->post('bank_ifsc', ''))),
@@ -74,7 +124,9 @@ class SettingsController
         ]);
 
         // Refresh session
-        $bFresh = $pdo->query("SELECT * FROM businesses WHERE id = {$businessId}")->fetch(PDO::FETCH_ASSOC);
+        $bFreshStmt = $pdo->prepare("SELECT * FROM businesses WHERE id = ?");
+        $bFreshStmt->execute([$businessId]);
+        $bFresh = $bFreshStmt->fetch(PDO::FETCH_ASSOC);
         $bFresh['role'] = $business['role'] ?? 'owner';
         Session::set('business', $bFresh);
 
@@ -103,6 +155,10 @@ class SettingsController
         $pdo = Database::pdo();
 
         $gstStatus = $request->post('gst_status', 'registered_regular');
+        $allowedStatuses = ['registered_regular', 'registered_composition', 'unregistered', 'overseas', 'sez'];
+        if (!in_array($gstStatus, $allowedStatuses, true)) {
+            $gstStatus = ($gstStatus === 'composition') ? 'registered_composition' : 'registered_regular';
+        }
         $gstin = strtoupper(trim($request->post('gstin', '')));
         $pan = strtoupper(trim($request->post('pan', '')));
 
@@ -123,7 +179,9 @@ class SettingsController
         ");
         $up->execute([$gstStatus, $gstin ?: null, $pan ?: null, $stateCode ?: null, $stateName ?: $business['state'], $businessId]);
 
-        $bFresh = $pdo->query("SELECT * FROM businesses WHERE id = {$businessId}")->fetch(PDO::FETCH_ASSOC);
+        $bFreshStmt = $pdo->prepare("SELECT * FROM businesses WHERE id = ?");
+        $bFreshStmt->execute([$businessId]);
+        $bFresh = $bFreshStmt->fetch(PDO::FETCH_ASSOC);
         $bFresh['role'] = $business['role'] ?? 'owner';
         Session::set('business', $bFresh);
 
@@ -151,6 +209,16 @@ class SettingsController
         $businessId = (int)$business['id'];
         $pdo = Database::pdo();
 
+        $invPrefix = strtoupper(trim($request->post('invoice_prefix', 'INV')));
+        $estPrefix = strtoupper(trim($request->post('estimate_prefix', 'EST')));
+        $payPrefix = strtoupper(trim($request->post('payment_prefix', 'PAY')));
+        $padding = max(2, min(8, (int)$request->post('number_padding', 4)));
+
+        if (strlen($invPrefix) > 6) {
+            Session::flash('error', 'Invoice prefix cannot exceed 6 characters to comply with GST Rule 46 (max 16 characters total).');
+            return Response::redirect(url('/settings/invoice'));
+        }
+
         $up = $pdo->prepare("
             UPDATE businesses SET
                 invoice_prefix = ?, estimate_prefix = ?, payment_prefix = ?, number_padding = ?,
@@ -160,10 +228,10 @@ class SettingsController
         ");
 
         $up->execute([
-            strtoupper(trim($request->post('invoice_prefix', 'INV'))),
-            strtoupper(trim($request->post('estimate_prefix', 'EST'))),
-            strtoupper(trim($request->post('payment_prefix', 'PAY'))),
-            max(2, min(8, (int)$request->post('number_padding', 4))),
+            $invPrefix,
+            $estPrefix,
+            $payPrefix,
+            $padding,
             trim($request->post('default_payment_terms', 'Net 15')),
             max(0, (int)$request->post('default_due_days', 15)),
             trim($request->post('default_notes', '')),
@@ -171,7 +239,9 @@ class SettingsController
             $businessId
         ]);
 
-        $bFresh = $pdo->query("SELECT * FROM businesses WHERE id = {$businessId}")->fetch(PDO::FETCH_ASSOC);
+        $bFreshStmt = $pdo->prepare("SELECT * FROM businesses WHERE id = ?");
+        $bFreshStmt->execute([$businessId]);
+        $bFresh = $bFreshStmt->fetch(PDO::FETCH_ASSOC);
         $bFresh['role'] = $business['role'] ?? 'owner';
         Session::set('business', $bFresh);
 

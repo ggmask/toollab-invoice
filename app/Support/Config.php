@@ -66,4 +66,35 @@ class Config
 
         return $current;
     }
+
+    public static function set(string $key, $value): void
+    {
+        $parts = explode('.', $key);
+        $file = array_shift($parts);
+
+        if (!isset(self::$configs[$file])) {
+            $filePath = __DIR__ . '/../../config/' . $file . '.php';
+            if (file_exists($filePath)) {
+                self::$configs[$file] = require $filePath;
+            } else {
+                self::$configs[$file] = [];
+            }
+        }
+
+        if (empty($parts)) {
+            self::$configs[$file] = $value;
+            return;
+        }
+
+        $current = &self::$configs[$file];
+        while (count($parts) > 1) {
+            $part = array_shift($parts);
+            if (!isset($current[$part]) || !is_array($current[$part])) {
+                $current[$part] = [];
+            }
+            $current = &$current[$part];
+        }
+
+        $current[array_shift($parts)] = $value;
+    }
 }

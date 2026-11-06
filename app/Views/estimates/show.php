@@ -20,6 +20,15 @@
     </a>
 
     <?php if ($estimate['status'] !== 'converted'): ?>
+      <a href="<?= url('/estimates/' . $estimate['id'] . '/edit') ?>" class="btn btn-secondary btn-sm">
+        Edit
+      </a>
+      <form action="<?= url('/estimates/' . $estimate['id'] . '/delete') ?>" method="POST" style="margin: 0;" onsubmit="return confirm('Permanently delete this quotation? This action cannot be undone.');">
+        <?= csrf_field() ?>
+        <button type="submit" class="btn btn-secondary btn-sm" style="color: var(--danger);">
+          Delete
+        </button>
+      </form>
       <form action="<?= url('/estimates/' . $estimate['id'] . '/convert') ?>" method="POST" style="margin: 0;" onsubmit="return confirm('Convert this estimate into a draft invoice? Agreed line items and prices will be transferred.');">
         <?= csrf_field() ?>
         <button type="submit" class="btn btn-primary btn-sm">

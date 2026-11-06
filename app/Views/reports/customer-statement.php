@@ -78,8 +78,10 @@
     $totalDebits = 0.0;
     $totalCredits = 0.0;
     foreach ($ledger as $item) {
-      $totalDebits += (float)$item['debit'];
-      $totalCredits += (float)$item['credit'];
+      if ($item['type'] !== 'opening_balance') {
+        $totalDebits += (float)$item['debit'];
+        $totalCredits += (float)$item['credit'];
+      }
     }
   ?>
 
@@ -116,12 +118,17 @@
     <!-- Summary Metrics -->
     <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; text-align: center;">
       <div style="background: var(--slate-50); padding: 12px; border-radius: var(--radius); border: 1px solid var(--slate-200);">
-        <span style="font-size: 11px; text-transform: uppercase; font-weight: 600; color: var(--slate-500); display: block;">Total Invoiced (Debits)</span>
+        <span style="font-size: 11px; text-transform: uppercase; font-weight: 600; color: var(--slate-500); display: block;">Opening Balance</span>
+        <span style="font-size: 18px; font-weight: 700; color: <?= ($openingBalance > 0) ? 'var(--danger)' : 'var(--slate-800)' ?>;"><?= format_currency($openingBalance) ?></span>
+      </div>
+
+      <div style="background: var(--slate-50); padding: 12px; border-radius: var(--radius); border: 1px solid var(--slate-200);">
+        <span style="font-size: 11px; text-transform: uppercase; font-weight: 600; color: var(--slate-500); display: block;">Invoiced This Period</span>
         <span style="font-size: 18px; font-weight: 700; color: var(--slate-900);"><?= format_currency($totalDebits) ?></span>
       </div>
 
       <div style="background: var(--slate-50); padding: 12px; border-radius: var(--radius); border: 1px solid var(--slate-200);">
-        <span style="font-size: 11px; text-transform: uppercase; font-weight: 600; color: var(--slate-500); display: block;">Total Paid (Credits)</span>
+        <span style="font-size: 11px; text-transform: uppercase; font-weight: 600; color: var(--slate-500); display: block;">Paid This Period</span>
         <span style="font-size: 18px; font-weight: 700; color: var(--success);"><?= format_currency($totalCredits) ?></span>
       </div>
 
@@ -166,6 +173,8 @@
                 <td>
                   <?php if ($l['type'] === 'invoice'): ?>
                     <span style="font-size: 11px; padding: 2px 6px; background: var(--info-light); color: var(--info); border-radius: 4px; font-weight: 600;">Invoice</span>
+                  <?php elseif ($l['type'] === 'opening_balance'): ?>
+                    <span style="font-size: 11px; padding: 2px 6px; background: var(--slate-200); color: var(--slate-700); border-radius: 4px; font-weight: 600;">Opening</span>
                   <?php else: ?>
                     <span style="font-size: 11px; padding: 2px 6px; background: var(--success-light); color: var(--success); border-radius: 4px; font-weight: 600;">Receipt</span>
                   <?php endif; ?>

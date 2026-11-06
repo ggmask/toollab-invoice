@@ -2,6 +2,7 @@
 /.idea/
 /.vscode/
 /.env
+/.phpunit.cache/
 *.log
 .DS_Store
 Thumbs.db

@@ -90,7 +90,13 @@ class EstimateController
 
         $states = Config::get('constants.gst_states', []);
         $units = Config::get('constants.units', []);
-        $gstRates = Config::get('constants.gst_rates', []);
+        $defaultGstRates = Config::get('constants.gst_rates', [0, 5, 12, 18, 28]);
+
+        $trStmt = $pdo->prepare("SELECT rate FROM tax_rates WHERE business_id = ? AND is_active = 1");
+        $trStmt->execute([$businessId]);
+        $customRates = $trStmt->fetchAll(PDO::FETCH_COLUMN);
+        $gstRates = array_unique(array_merge($defaultGstRates, array_map('floatval', $customRates)));
+        sort($gstRates);
 
         $nextEstimateNumber = DocumentNumberService::previewNextNumber(
             $businessId,
@@ -148,8 +154,9 @@ class EstimateController
         $discountType = $request->post('estimate_discount_type', 'flat');
         $discountValue = max(0.0, (float)$request->post('estimate_discount_value', 0));
         $additionalCharges = max(0.0, (float)$request->post('additional_charges', 0));
+        $additionalChargesGstRate = max(0.0, (float)$request->post('additional_charges_gst_rate', 0));
 
-        $calc = InvoiceCalculationService::calculate($rawItems, $supplyType, $discountType, $discountValue, $additionalCharges);
+        $calc = InvoiceCalculationService::calculate($rawItems, $supplyType, $discountType, $discountValue, $additionalCharges, $additionalChargesGstRate);
         $fy = FinancialYear::forDate($estimateDate);
 
         try {
@@ -341,6 +348,250 @@ class EstimateController
         ]));
     }
 
+    public function edit(Request $request, string $id): Response
+    {
+        $business = Session::get('business');
+        $businessId = (int)$business['id'];
+        $pdo = Database::pdo();
+
+        $stmt = $pdo->prepare("SELECT * FROM estimates WHERE id = ? AND business_id = ?");
+        $stmt->execute([$id, $businessId]);
+        $estimate = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$estimate) {
+            Session::flash('error', 'Estimate not found.');
+            return Response::redirect(url('/estimates'));
+        }
+
+        if ($estimate['status'] === 'converted') {
+            Session::flash('error', 'Converted estimates cannot be edited directly.');
+            return Response::redirect(url('/estimates/' . $id));
+        }
+
+        $iStmt = $pdo->prepare("SELECT * FROM estimate_items WHERE estimate_id = ? ORDER BY item_order ASC");
+        $iStmt->execute([$id]);
+        $items = $iStmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $cStmt = $pdo->prepare("SELECT * FROM customers WHERE business_id = ? AND is_archived = 0 ORDER BY name ASC");
+        $cStmt->execute([$businessId]);
+        $customers = $cStmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $pStmt = $pdo->prepare("SELECT * FROM products WHERE business_id = ? AND is_archived = 0 ORDER BY name ASC");
+        $pStmt->execute([$businessId]);
+        $products = $pStmt->fetchAll(PDO::FETCH_ASSOC);
+
+        $states = Config::get('constants.gst_states', []);
+        $units = Config::get('constants.units', []);
+        $defaultGstRates = Config::get('constants.gst_rates', [0, 5, 12, 18, 28]);
+
+        $trStmt = $pdo->prepare("SELECT rate FROM tax_rates WHERE business_id = ? AND is_active = 1");
+        $trStmt->execute([$businessId]);
+        $customRates = $trStmt->fetchAll(PDO::FETCH_COLUMN);
+        $gstRates = array_unique(array_merge($defaultGstRates, array_map('floatval', $customRates)));
+        sort($gstRates);
+
+        return new Response(View::render('estimates.edit', [
+            'title' => 'Edit Estimate ' . $estimate['estimate_number'],
+            'business' => $business,
+            'estimate' => $estimate,
+            'customers' => $customers,
+            'products' => $products,
+            'items' => $items,
+            'states' => $states,
+            'units' => $units,
+            'gstRates' => $gstRates,
+        ]));
+    }
+
+    public function update(Request $request, string $id): Response
+    {
+        $business = Session::get('business');
+        $businessId = (int)$business['id'];
+        $pdo = Database::pdo();
+
+        $stmt = $pdo->prepare("SELECT * FROM estimates WHERE id = ? AND business_id = ?");
+        $stmt->execute([$id, $businessId]);
+        $estimate = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$estimate || $estimate['status'] === 'converted') {
+            Session::flash('error', 'Converted estimates cannot be updated.');
+            return Response::redirect(url('/estimates'));
+        }
+
+        $customerId = (int)$request->post('customer_id', $estimate['customer_id']);
+        $estimateDate = $request->post('estimate_date', $estimate['estimate_date']);
+        $validUntil = $request->post('valid_until', $estimate['valid_until']);
+
+        $cStmt = $pdo->prepare("SELECT * FROM customers WHERE id = ? AND business_id = ?");
+        $cStmt->execute([$customerId, $businessId]);
+        $customer = $cStmt->fetch(PDO::FETCH_ASSOC);
+
+        $rawItems = $request->post('items', []);
+        if (empty($rawItems)) {
+            Session::flash('error', 'At least one line item is required.');
+            return Response::redirect(url('/estimates/' . $id . '/edit'));
+        }
+
+        $posCode = trim($request->post('place_of_supply_state_code', '')) ?: $customer['billing_state_code'];
+        $states = Config::get('constants.gst_states', []);
+        $posState = $states[$posCode] ?? trim($request->post('place_of_supply_state', ''));
+
+        $supplierStateCode = $business['state_code'] ?? '';
+        $supplyType = TaxCalculationService::determineSupplyType($supplierStateCode, $posCode);
+
+        $discountType = $request->post('estimate_discount_type', 'flat');
+        $discountValue = max(0.0, (float)$request->post('estimate_discount_value', 0));
+        $additionalCharges = max(0.0, (float)$request->post('additional_charges', 0));
+        $additionalChargesGstRate = max(0.0, (float)$request->post('additional_charges_gst_rate', 0));
+
+        $calc = InvoiceCalculationService::calculate($rawItems, $supplyType, $discountType, $discountValue, $additionalCharges, $additionalChargesGstRate);
+        $fy = FinancialYear::forDate($estimateDate);
+
+        Database::transaction(function (PDO $pdo) use (
+            $id, $businessId, $customerId, $customer, $business, $estimateDate, $validUntil,
+            $request, $posState, $posCode, $supplyType, $calc, $fy, $estimate
+        ) {
+            $uStmt = $pdo->prepare("
+                UPDATE estimates SET
+                    customer_id = ?, financial_year = ?, estimate_date = ?, valid_until = ?,
+                    place_of_supply_state = ?, place_of_supply_state_code = ?, supply_type = ?,
+                    customer_name = ?, customer_gstin = ?, customer_billing_address = ?, customer_billing_city = ?, customer_billing_state = ?, customer_billing_state_code = ?, customer_billing_pincode = ?, customer_email = ?, customer_phone = ?,
+                    subtotal_gross = ?, line_discounts_total = ?, estimate_discount_type = ?, estimate_discount_value = ?, estimate_discount_amount = ?,
+                    taxable_value = ?, cgst_amount = ?, sgst_amount = ?, igst_amount = ?, cess_amount = ?, tax_total = ?,
+                    additional_charges = ?, rounding_adjustment = ?, total_amount = ?,
+                    notes = ?, terms = ?, updated_at = NOW()
+                WHERE id = ? AND business_id = ?
+            ");
+
+            $uStmt->execute([
+                $customerId,
+                $fy,
+                $estimateDate,
+                $validUntil,
+                $posState,
+                $posCode,
+                $supplyType,
+                $customer['name'],
+                $customer['gstin'] ?? null,
+                $customer['billing_address'] ?? '',
+                $customer['billing_city'] ?? '',
+                $customer['billing_state'] ?? '',
+                $customer['billing_state_code'] ?? '',
+                $customer['billing_pincode'] ?? '',
+                $customer['email'] ?? '',
+                $customer['phone'] ?? '',
+                $calc['subtotal_gross'],
+                $calc['line_discounts_total'],
+                $calc['invoice_discount_type'],
+                $calc['invoice_discount_value'],
+                $calc['invoice_discount_amount'],
+                $calc['taxable_value'],
+                $calc['cgst_amount'],
+                $calc['sgst_amount'],
+                $calc['igst_amount'],
+                $calc['cess_amount'],
+                $calc['tax_total'],
+                $calc['additional_charges'],
+                $calc['rounding_adjustment'],
+                $calc['total_amount'],
+                trim($request->post('notes', '')),
+                trim($request->post('terms', '')),
+                $id,
+                $businessId,
+            ]);
+
+            $delStmt = $pdo->prepare("DELETE FROM estimate_items WHERE estimate_id = ?");
+            $delStmt->execute([$id]);
+
+            $itemStmt = $pdo->prepare("
+                INSERT INTO estimate_items (
+                    estimate_id, product_id, item_order, name, description, hsn_sac, item_type,
+                    quantity, unit, unit_price, gross_amount,
+                    discount_type, discount_value, discount_amount, taxable_value,
+                    tax_category, gst_rate, cgst_rate, cgst_amount, sgst_rate, sgst_amount,
+                    igst_rate, igst_amount, cess_rate, cess_amount, total_tax, line_total
+                ) VALUES (
+                    ?, ?, ?, ?, ?, ?, ?,
+                    ?, ?, ?, ?,
+                    ?, ?, ?, ?,
+                    ?, ?, ?, ?, ?, ?,
+                    ?, ?, ?, ?, ?, ?
+                )
+            ");
+
+            foreach ($calc['items'] as $item) {
+                $itemStmt->execute([
+                    $id,
+                    $item['product_id'],
+                    $item['item_order'],
+                    $item['name'],
+                    $item['description'],
+                    $item['hsn_sac'],
+                    $item['item_type'],
+                    $item['quantity'],
+                    $item['unit'],
+                    $item['unit_price'],
+                    $item['gross_amount'],
+                    $item['discount_type'],
+                    $item['discount_value'],
+                    $item['discount_amount'],
+                    $item['taxable_value'],
+                    $item['tax_category'],
+                    $item['gst_rate'],
+                    $item['cgst_rate'],
+                    $item['cgst_amount'],
+                    $item['sgst_rate'],
+                    $item['sgst_amount'],
+                    $item['igst_rate'],
+                    $item['igst_amount'],
+                    $item['cess_rate'],
+                    $item['cess_amount'],
+                    $item['total_tax'],
+                    $item['line_total'],
+                ]);
+            }
+
+            AuditService::log('estimate.updated', 'estimate', (int)$id, ['estimate_number' => $estimate['estimate_number']]);
+        });
+
+        Session::flash('success', 'Quotation updated successfully.');
+        return Response::redirect(url('/estimates/' . $id));
+    }
+
+    public function destroy(Request $request, string $id): Response
+    {
+        $business = Session::get('business');
+        $businessId = (int)$business['id'];
+        $pdo = Database::pdo();
+
+        $stmt = $pdo->prepare("SELECT * FROM estimates WHERE id = ? AND business_id = ?");
+        $stmt->execute([$id, $businessId]);
+        $estimate = $stmt->fetch(PDO::FETCH_ASSOC);
+
+        if (!$estimate) {
+            Session::flash('error', 'Estimate not found.');
+            return Response::redirect(url('/estimates'));
+        }
+
+        if ($estimate['status'] === 'converted') {
+            Session::flash('error', 'Cannot delete an estimate that has already been converted to an invoice.');
+            return Response::redirect(url('/estimates/' . $id));
+        }
+
+        Database::transaction(function (PDO $pdo) use ($id, $businessId, $estimate) {
+            $delItems = $pdo->prepare("DELETE FROM estimate_items WHERE estimate_id = ?");
+            $delItems->execute([$id]);
+
+            $delEst = $pdo->prepare("DELETE FROM estimates WHERE id = ? AND business_id = ?");
+            $delEst->execute([$id, $businessId]);
+
+            AuditService::log('estimate.deleted', 'estimate', (int)$id, ['estimate_number' => $estimate['estimate_number']]);
+        });
+
+        Session::flash('success', "Quotation {$estimate['estimate_number']} has been permanently deleted.");
+        return Response::redirect(url('/estimates'));
+    }
+
     public function updateStatus(Request $request, string $id): Response
     {
         $business = Session::get('business');
@@ -396,7 +647,7 @@ class EstimateController
 
                 $prefix = $business['invoice_prefix'] ?? 'INV';
                 $padding = (int)($business['number_padding'] ?? 4);
-                $invoiceNumber = DocumentNumberService::previewNextNumber($businessId, 'invoice', $prefix, $padding, $fy);
+                $invoiceNumber = DocumentNumberService::generateDraftNumber($businessId, $padding, $fy);
 
                 $uuid = sprintf('%04x%04x-%04x-%04x-%04x-%04x%04x%04x',
                     mt_rand(0, 0xffff), mt_rand(0, 0xffff), mt_rand(0, 0xffff),

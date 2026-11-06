@@ -14,7 +14,7 @@
   <a href="<?= url('/settings/account') ?>" class="nav-tab-item">User Security</a>
 </div>
 
-<form method="POST" action="<?= url('/settings/business') ?>">
+<form method="POST" action="<?= url('/settings/business') ?>" enctype="multipart/form-data">
   <?= csrf_field() ?>
 
   <!-- 1. Company Identity -->
@@ -24,6 +24,29 @@
     </div>
     <div class="card-body">
       <div class="form-grid" style="grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));">
+        <!-- Logo Upload -->
+        <div class="form-group" style="grid-column: span 2;">
+          <label class="form-label" for="logo">Company Logo (For Invoices & PDFs)</label>
+          <div style="display: flex; align-items: center; gap: 16px;">
+            <?php if (!empty($business['logo_url'])): ?>
+              <div style="width: 80px; height: 80px; border: 1px solid var(--slate-200); border-radius: var(--radius); padding: 4px; display: flex; align-items: center; justify-content: center; background: #fff;">
+                <img src="<?= asset($business['logo_url']) ?>" alt="Logo" style="max-width: 100%; max-height: 100%; object-fit: contain;">
+              </div>
+            <?php endif; ?>
+            <div style="flex: 1;">
+              <input type="file" name="logo" id="logo" class="form-control" accept="image/png,image/jpeg,image/webp,image/svg+xml">
+              <div style="font-size: 11px; color: var(--slate-500); margin-top: 4px;">Recommended: High-resolution PNG, JPG, or SVG (max 2 MB). Transparent background works best on PDFs.</div>
+              <?php if (!empty($business['logo_url'])): ?>
+                <div style="margin-top: 6px;">
+                  <label style="font-size: 12px; color: var(--danger); cursor: pointer;">
+                    <input type="checkbox" name="remove_logo" value="1"> Remove current logo
+                  </label>
+                </div>
+              <?php endif; ?>
+            </div>
+          </div>
+        </div>
+
         <div class="form-group" style="grid-column: span 2;">
           <label class="form-label" for="legal_name">Legal Registered Entity Name <span style="color: var(--danger);">*</span></label>
           <input type="text" name="legal_name" id="legal_name" value="<?= e($business['legal_name'] ?? '') ?>" class="form-control" required>

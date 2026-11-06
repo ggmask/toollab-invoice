@@ -30,7 +30,7 @@
               $status = $business['gst_status'] ?? 'registered_regular';
             ?>
             <option value="registered_regular" <?= ($status === 'registered_regular') ? 'selected' : '' ?>>Registered Regular Taxpayer (Standard CGST / SGST / IGST Tax Invoices)</option>
-            <option value="composition" <?= ($status === 'composition') ? 'selected' : '' ?>>Composition Scheme (Bill of Supply - No Tax Collected)</option>
+            <option value="registered_composition" <?= ($status === 'registered_composition' || $status === 'composition') ? 'selected' : '' ?>>Composition Scheme (Bill of Supply - No Tax Collected)</option>
             <option value="unregistered" <?= ($status === 'unregistered') ? 'selected' : '' ?>>Unregistered Business (Under ₹20L/₹40L Exemption Threshold)</option>
             <option value="sez" <?= ($status === 'sez') ? 'selected' : '' ?>>Special Economic Zone (SEZ Unit / Developer - Zero Rated)</option>
           </select>

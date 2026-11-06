@@ -15,9 +15,10 @@ document.addEventListener('DOMContentLoaded', () => {
     overlay.addEventListener('click', toggleMenu);
   }
 
-  // 2. Register PWA Service Worker
+  // 2. Register PWA Service Worker safely
   if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
-    navigator.serviceWorker.register('/sw.js').catch((err) => {
+    const appUrl = document.querySelector('meta[name="app-url"]')?.content || '';
+    navigator.serviceWorker.register(`${appUrl}/sw.js`).catch((err) => {
       console.debug('ServiceWorker registration skipped:', err);
     });
   }
@@ -44,11 +45,14 @@ function initLineItemsCalculator() {
   const invDiscountValue = document.getElementById('invoice_discount_value');
   const invDiscountType = document.getElementById('invoice_discount_type');
   const additionalChargesInput = document.getElementById('additional_charges');
+  const additionalChargesGstRateSelect = document.getElementById('additional_charges_gst_rate');
+  const reverseChargeCheckbox = document.getElementById('is_reverse_charge');
 
   function calculateAll() {
     const rows = container.querySelectorAll('.line-item-row');
     const posCode = posCodeSelect?.value || supplierStateCode;
     const isIntraState = !posCode || !supplierStateCode || (posCode.padStart(2, '0') === supplierStateCode.padStart(2, '0'));
+    const isReverseCharge = reverseChargeCheckbox ? reverseChargeCheckbox.checked : false;
 
     let subtotalGross = 0;
     let lineDiscountsTotal = 0;
@@ -143,11 +147,34 @@ function initLineItemsCalculator() {
       }
     });
 
-    const taxTotal = Math.round((totalCgst + totalSgst + totalIgst) * 100) / 100;
+    // Additional Charges & Freight GST (Section 15 CGST Act)
     const addCharges = parseFloat(additionalChargesInput?.value) || 0;
-    const subtotalWithTax = Math.round((finalTaxableTotal + taxTotal + addCharges) * 100) / 100;
-    const finalTotal = Math.round(subtotalWithTax);
-    const roundOff = Math.round((finalTotal - subtotalWithTax) * 100) / 100;
+    const addChargesGstRate = parseFloat(additionalChargesGstRateSelect?.value) || 0;
+
+    let addChargesCgst = 0, addChargesSgst = 0, addChargesIgst = 0;
+    if (addCharges > 0 && addChargesGstRate > 0) {
+      if (isIntraState) {
+        addChargesCgst = Math.round(addCharges * ((addChargesGstRate / 2) / 100) * 100) / 100;
+        addChargesSgst = Math.round(addCharges * ((addChargesGstRate / 2) / 100) * 100) / 100;
+      } else {
+        addChargesIgst = Math.round(addCharges * (addChargesGstRate / 100) * 100) / 100;
+      }
+      finalTaxableTotal = Math.round((finalTaxableTotal + addCharges) * 100) / 100;
+      totalCgst += addChargesCgst;
+      totalSgst += addChargesSgst;
+      totalIgst += addChargesIgst;
+    }
+
+    const taxTotal = Math.round((totalCgst + totalSgst + totalIgst) * 100) / 100;
+
+    // Under Reverse Charge (RCM), tax is payable by recipient directly to Govt
+    const customerPayableTax = isReverseCharge ? 0 : taxTotal;
+    const baseTotal = (addChargesGstRate > 0)
+      ? Math.round((finalTaxableTotal + customerPayableTax) * 100) / 100
+      : Math.round((finalTaxableTotal + customerPayableTax + addCharges) * 100) / 100;
+
+    const finalTotal = Math.round(baseTotal);
+    const roundOff = Math.round((finalTotal - baseTotal) * 100) / 100;
 
     // Update DOM summary cards
     setText('sum_subtotal_gross', formatCurrencyJs(subtotalGross));
@@ -172,7 +199,8 @@ function initLineItemsCalculator() {
       setText('sum_igst', formatCurrencyJs(totalIgst));
     }
 
-    setText('sum_tax_total', formatCurrencyJs(taxTotal));
+    const taxLabelSuffix = isReverseCharge ? ' (RCM - Paid by Recipient)' : '';
+    setText('sum_tax_total', formatCurrencyJs(taxTotal) + taxLabelSuffix);
     setText('sum_add_charges', formatCurrencyJs(addCharges));
     setText('sum_round_off', (roundOff >= 0 ? '+' : '') + formatCurrencyJs(roundOff));
     setText('sum_final_total', formatCurrencyJs(finalTotal));
@@ -200,6 +228,38 @@ function initLineItemsCalculator() {
     }
   });
 
+  // Product selection auto-fill from datalist
+  container.addEventListener('input', (e) => {
+    if (e.target.classList.contains('item-name')) {
+      const val = e.target.value.trim();
+      const option = document.querySelector(`#products-datalist option[value="${CSS.escape(val)}"]`);
+      if (option) {
+        const row = e.target.closest('.line-item-row');
+        if (row) {
+          const idEl = row.querySelector('.item-product-id');
+          if (idEl) idEl.value = option.dataset.id || '';
+
+          const descEl = row.querySelector('.item-desc') || row.querySelector('textarea');
+          if (descEl && !descEl.value) descEl.value = option.dataset.description || '';
+
+          const hsnEl = row.querySelector('input[name*="[hsn_sac]"]');
+          if (hsnEl && !hsnEl.value) hsnEl.value = option.dataset.hsn || '';
+
+          const unitEl = row.querySelector('select[name*="[unit]"]');
+          if (unitEl && option.dataset.unit) unitEl.value = option.dataset.unit;
+
+          const priceEl = row.querySelector('.item-price');
+          if (priceEl && option.dataset.price) priceEl.value = option.dataset.price;
+
+          const gstEl = row.querySelector('.item-gst-rate');
+          if (gstEl && option.dataset.rate) gstEl.value = option.dataset.rate;
+
+          calculateAll();
+        }
+      }
+    }
+  });
+
   // Input change recalculation
   container.addEventListener('input', calculateAll);
   container.addEventListener('change', calculateAll);
@@ -208,6 +268,8 @@ function initLineItemsCalculator() {
   if (invDiscountValue) invDiscountValue.addEventListener('input', calculateAll);
   if (invDiscountType) invDiscountType.addEventListener('change', calculateAll);
   if (additionalChargesInput) additionalChargesInput.addEventListener('input', calculateAll);
+  if (additionalChargesGstRateSelect) additionalChargesGstRateSelect.addEventListener('change', calculateAll);
+  if (reverseChargeCheckbox) reverseChargeCheckbox.addEventListener('change', calculateAll);
 
   // Add line item
   if (addBtn) {
@@ -217,14 +279,15 @@ function initLineItemsCalculator() {
       row.className = 'line-item-row';
       row.innerHTML = `
         <td style="width: 30%;">
-          <input type="text" name="items[${idx}][name]" class="form-control form-control-sm item-name" placeholder="Item Name / Description" required>
-          <textarea name="items[${idx}][description]" class="form-control form-control-sm" rows="1" placeholder="Optional details..." style="margin-top: 4px;"></textarea>
+          <input type="hidden" name="items[${idx}][product_id]" class="item-product-id" value="">
+          <input type="text" name="items[${idx}][name]" list="products-datalist" class="form-control form-control-sm item-name" placeholder="Item Name / Type to search..." required autocomplete="off">
+          <textarea name="items[${idx}][description]" class="form-control form-control-sm item-desc" rows="1" placeholder="Optional details..." style="margin-top: 4px;"></textarea>
         </td>
         <td style="width: 12%;">
           <input type="text" name="items[${idx}][hsn_sac]" class="form-control form-control-sm" placeholder="HSN/SAC">
         </td>
         <td style="width: 10%;">
-          <input type="number" step="0.001" name="items[${idx}][quantity]" class="form-control form-control-sm item-qty text-right" value="1" min="0.001" required>
+          <input type="number" step="0.001" name="items[${idx}][quantity]" class="form-control form-control-sm item-qty text-right" value="1" min="0" required>
         </td>
         <td style="width: 10%;">
           <select name="items[${idx}][unit]" class="form-control form-control-sm">
@@ -280,6 +343,7 @@ function initPaymentCustomerLoader(selectEl) {
   const invoiceContainer = document.getElementById('payment-invoices-list');
   const amountInput = document.getElementById('payment_amount');
   const autoAllocateBtn = document.getElementById('auto-allocate-btn');
+  const apiBase = document.querySelector('meta[name="app-url"]')?.content || '';
 
   function loadInvoices(customerId) {
     if (!customerId) {
@@ -291,7 +355,7 @@ function initPaymentCustomerLoader(selectEl) {
       invoiceContainer.innerHTML = '<p class="text-muted" style="padding: 12px;">Loading unpaid customer invoices...</p>';
     }
 
-    fetch(`/api/customers/${customerId}/invoices`)
+    fetch(`${apiBase}/api/customers/${customerId}/invoices`)
       .then((res) => res.json())
       .then((invoices) => {
         if (!invoices || invoices.length === 0) {

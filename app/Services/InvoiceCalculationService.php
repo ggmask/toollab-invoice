@@ -5,14 +5,17 @@ namespace App\Services;
 class InvoiceCalculationService
 {
     /**
-     * Calculate financial totals for line items and document-level adjustments.
+     * Calculate financial totals for line items, taxes, and document-level adjustments.
+     * Complies with CGST Act Section 15 (Valuation of Supply) and Section 9 (Reverse Charge).
      */
     public static function calculate(
         array $items,
         string $supplyType = 'intra_state',
         string $discountType = 'flat',
         float $discountValue = 0.0,
-        float $additionalCharges = 0.0
+        float $additionalCharges = 0.0,
+        float $additionalChargesGstRate = 0.0,
+        bool $isReverseCharge = false
     ): array {
         $calculatedItems = [];
         $subtotalGross = 0.0;
@@ -21,20 +24,40 @@ class InvoiceCalculationService
 
         // Step 1: Calculate raw line gross, discounts, and pre-invoice-discount taxable value
         foreach ($items as $index => $item) {
-            $qty = max(0.001, (float)($item['quantity'] ?? 1));
+            $qty = max(0.0, (float)($item['quantity'] ?? 0));
             $unitPrice = max(0.0, (float)($item['unit_price'] ?? 0));
-            $gross = round($qty * $unitPrice, 2);
+            $gstRate = max(0.0, (float)($item['gst_rate'] ?? 18));
+            $cessRate = max(0.0, (float)($item['cess_rate'] ?? 0));
+            $taxCategory = $item['tax_category'] ?? 'taxable';
+            $isTaxInclusive = !empty($item['is_tax_inclusive']);
 
             $discType = ($item['discount_type'] ?? 'percentage') === 'flat' ? 'flat' : 'percentage';
             $discVal = max(0.0, (float)($item['discount_value'] ?? 0));
 
-            if ($discType === 'percentage') {
-                $lineDiscAmt = round($gross * ($discVal / 100), 2);
-            } else {
-                $lineDiscAmt = min($gross, round($discVal, 2));
-            }
+            if ($isTaxInclusive && $taxCategory === 'taxable' && ($gstRate + $cessRate) > 0) {
+                // Tax-inclusive pricing (MRP)
+                $grossInclusive = round($qty * $unitPrice, 2);
+                if ($discType === 'percentage') {
+                    $discAmtInclusive = round($grossInclusive * ($discVal / 100), 2);
+                } else {
+                    $discAmtInclusive = min($grossInclusive, round($discVal, 2));
+                }
+                $netInclusive = max(0.0, $grossInclusive - $discAmtInclusive);
 
-            $lineTaxable = max(0.0, round($gross - $lineDiscAmt, 2));
+                $effectiveTaxRate = 1 + (($gstRate + $cessRate) / 100);
+                $lineTaxable = round($netInclusive / $effectiveTaxRate, 2);
+                $gross = round($grossInclusive / $effectiveTaxRate, 2);
+                $lineDiscAmt = max(0.0, round($gross - $lineTaxable, 2));
+            } else {
+                // Tax-exclusive pricing (standard B2B)
+                $gross = round($qty * $unitPrice, 2);
+                if ($discType === 'percentage') {
+                    $lineDiscAmt = round($gross * ($discVal / 100), 2);
+                } else {
+                    $lineDiscAmt = min($gross, round($discVal, 2));
+                }
+                $lineTaxable = max(0.0, round($gross - $lineDiscAmt, 2));
+            }
 
             $subtotalGross += $gross;
             $lineDiscountsTotal += $lineDiscAmt;
@@ -56,9 +79,10 @@ class InvoiceCalculationService
                 'discount_amount' => $lineDiscAmt,
                 'pre_disc_taxable' => $lineTaxable,
                 'taxable_value' => $lineTaxable,
-                'tax_category' => $item['tax_category'] ?? 'taxable',
-                'gst_rate' => max(0.0, (float)($item['gst_rate'] ?? 18)),
-                'cess_rate' => max(0.0, (float)($item['cess_rate'] ?? 0)),
+                'tax_category' => $taxCategory,
+                'gst_rate' => $gstRate,
+                'cess_rate' => $cessRate,
+                'is_tax_inclusive' => $isTaxInclusive ? 1 : 0,
             ];
         }
 
@@ -127,10 +151,42 @@ class InvoiceCalculationService
         }
         unset($line);
 
-        $taxTotal = round($totalCgst + $totalSgst + $totalIgst + $totalCess, 2);
-        $subtotalWithTaxAndCharges = round($totalTaxable + $taxTotal + $additionalCharges, 2);
+        // Step 4: Additional Charges / Freight Taxation (Section 15 CGST Act)
+        $additionalCharges = max(0.0, round((float)$additionalCharges, 2));
+        $additionalChargesGstRate = max(0.0, (float)$additionalChargesGstRate);
+        $addChargeTax = [
+            'cgst_amount' => 0.0,
+            'sgst_amount' => 0.0,
+            'igst_amount' => 0.0,
+            'total_tax' => 0.0,
+        ];
 
-        // Document level rounding to nearest rupee
+        if ($additionalCharges > 0 && $additionalChargesGstRate > 0) {
+            $addChargeTax = TaxCalculationService::calculateTax(
+                $additionalCharges,
+                $additionalChargesGstRate,
+                $supplyType
+            );
+            $totalTaxable += $additionalCharges;
+            $totalCgst += $addChargeTax['cgst_amount'];
+            $totalSgst += $addChargeTax['sgst_amount'];
+            $totalIgst += $addChargeTax['igst_amount'];
+        }
+
+        $taxTotal = round($totalCgst + $totalSgst + $totalIgst + $totalCess, 2);
+
+        // Step 5: Customer Payable Total & Rounding Adjustment
+        // Under Reverse Charge (RCM), tax is payable by recipient directly to Govt, NOT collected by supplier
+        $customerTaxPayable = $isReverseCharge ? 0.00 : $taxTotal;
+
+        if ($additionalChargesGstRate > 0) {
+            // Additional charges already incorporated into totalTaxable
+            $subtotalWithTaxAndCharges = round($totalTaxable + $customerTaxPayable, 2);
+        } else {
+            $subtotalWithTaxAndCharges = round($totalTaxable + $customerTaxPayable + $additionalCharges, 2);
+        }
+
+        // Document-level rounding to nearest whole rupee
         $finalTotal = round($subtotalWithTaxAndCharges);
         $roundingAdj = round($finalTotal - $subtotalWithTaxAndCharges, 2);
 
@@ -147,7 +203,10 @@ class InvoiceCalculationService
             'igst_amount' => round($totalIgst, 2),
             'cess_amount' => round($totalCess, 2),
             'tax_total' => $taxTotal,
-            'additional_charges' => round($additionalCharges, 2),
+            'additional_charges' => $additionalCharges,
+            'additional_charges_gst_rate' => $additionalChargesGstRate,
+            'additional_charges_tax' => $addChargeTax['total_tax'],
+            'is_reverse_charge' => $isReverseCharge,
             'rounding_adjustment' => $roundingAdj,
             'total_amount' => $finalTotal,
         ];

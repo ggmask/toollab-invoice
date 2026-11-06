@@ -97,11 +97,26 @@
   </div>
 
   <!-- Line Items Table -->
+  <datalist id="products-datalist">
+    <?php foreach ($products as $p): ?>
+      <option value="<?= e($p['name']) ?>"
+              data-id="<?= (int)$p['id'] ?>"
+              data-description="<?= e($p['description'] ?? '') ?>"
+              data-hsn="<?= e($p['hsn_sac'] ?? '') ?>"
+              data-unit="<?= e($p['unit'] ?? 'PCS') ?>"
+              data-price="<?= e($p['selling_price'] ?? '0.00') ?>"
+              data-rate="<?= (float)($p['gst_rate'] ?? 18) ?>"
+              data-taxcat="<?= e($p['tax_category'] ?? 'taxable') ?>">
+        <?= e($p['sku'] ? "[{$p['sku']}] " : '') ?><?= e($p['name']) ?> (₹<?= number_format((float)$p['selling_price'], 2) ?>)
+      </option>
+    <?php endforeach; ?>
+  </datalist>
+
   <div class="card">
     <div class="card-header">
       <h2 class="card-title">2. Line Items (Products & Services)</h2>
       <div style="font-size: 12px; color: var(--slate-500);">
-        Intra-state (CGST + SGST) or Inter-state (IGST) calculated automatically.
+        Select from product catalog or type custom items. Intra-state (CGST + SGST) or Inter-state (IGST) calculated automatically.
       </div>
     </div>
     <div class="card-body" style="padding: 0;">
@@ -124,8 +139,9 @@
             <!-- Default First Row -->
             <tr class="line-item-row">
               <td style="width: 30%;">
-                <input type="text" name="items[0][name]" class="form-control form-control-sm item-name" placeholder="Item Name / Description" required>
-                <textarea name="items[0][description]" class="form-control form-control-sm" rows="1" placeholder="Optional details..." style="margin-top: 4px;"></textarea>
+                <input type="hidden" name="items[0][product_id]" class="item-product-id" value="">
+                <input type="text" name="items[0][name]" list="products-datalist" class="form-control form-control-sm item-name" placeholder="Item Name / Type to search..." required autocomplete="off">
+                <textarea name="items[0][description]" class="form-control form-control-sm item-desc" rows="1" placeholder="Optional details..." style="margin-top: 4px;"></textarea>
               </td>
               <td style="width: 12%;">
                 <input type="text" name="items[0][hsn_sac]" class="form-control form-control-sm" placeholder="HSN/SAC">
@@ -226,9 +242,21 @@
           </div>
 
           <!-- Additional Charges -->
-          <div>
-            <label class="form-label" for="additional_charges">Shipping / Other Charges (₹)</label>
-            <input type="number" step="0.01" name="additional_charges" id="additional_charges" class="form-control" value="0">
+          <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 8px;">
+            <div>
+              <label class="form-label" for="additional_charges">Shipping / Extra Charges (₹)</label>
+              <input type="number" step="0.01" name="additional_charges" id="additional_charges" class="form-control" value="0">
+            </div>
+            <div>
+              <label class="form-label" for="additional_charges_gst_rate">Freight GST</label>
+              <select name="additional_charges_gst_rate" id="additional_charges_gst_rate" class="form-control">
+                <option value="0">0% (Nil)</option>
+                <option value="5">5%</option>
+                <option value="12">12%</option>
+                <option value="18" selected>18%</option>
+                <option value="28">28%</option>
+              </select>
+            </div>
           </div>
         </div>
 

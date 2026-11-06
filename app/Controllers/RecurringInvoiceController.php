@@ -203,8 +203,8 @@ class RecurringInvoiceController
 
         if ($profile) {
             $newStatus = ($profile['status'] === 'active') ? 'paused' : 'active';
-            $up = $pdo->prepare("UPDATE recurring_profiles SET status = ?, updated_at = NOW() WHERE id = ?");
-            $up->execute([$newStatus, $id]);
+            $up = $pdo->prepare("UPDATE recurring_profiles SET status = ?, updated_at = NOW() WHERE id = ? AND business_id = ?");
+            $up->execute([$newStatus, $id, $businessId]);
 
             AuditService::log('recurring.status_changed', 'recurring_profile', (int)$id, ['status' => $newStatus]);
             Session::flash('success', "Recurring schedule is now {$newStatus}.");
@@ -251,8 +251,8 @@ class RecurringInvoiceController
         try {
             $newInvoiceId = Database::transaction(function (PDO $pdo) use ($profile, $business, $userId, $scheduledDate) {
                 // Fetch customer fresh details
-                $cStmt = $pdo->prepare("SELECT * FROM customers WHERE id = ?");
-                $cStmt->execute([$profile['customer_id']]);
+                $cStmt = $pdo->prepare("SELECT * FROM customers WHERE id = ? AND business_id = ?");
+                $cStmt->execute([$profile['customer_id'], $profile['business_id']]);
                 $customer = $cStmt->fetch(PDO::FETCH_ASSOC);
 
                 $items = json_decode($profile['items_json'], true) ?: [];
@@ -370,9 +370,9 @@ class RecurringInvoiceController
                 $profUp = $pdo->prepare("
                     UPDATE recurring_profiles 
                     SET next_issue_date = ?, last_generated_at = NOW(), last_generated_invoice_id = ?, status = ?, updated_at = NOW()
-                    WHERE id = ?
+                    WHERE id = ? AND business_id = ?
                 ");
-                $profUp->execute([$nextDate, $invId, $newProfileStatus, $profile['id']]);
+                $profUp->execute([$nextDate, $invId, $newProfileStatus, $profile['id'], $profile['business_id']]);
 
                 AuditService::log('recurring.invoice_generated', 'recurring_profile', (int)$profile['id'], [
                     'invoice_id' => $invId,

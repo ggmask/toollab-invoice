@@ -13,13 +13,19 @@ class PdfService
         $options = new Options();
         $options->set('isHtml5ParserEnabled', true);
         $options->set('isRemoteEnabled', true);
-        $options->set('defaultFont', 'Helvetica');
+        $options->set('defaultFont', 'DejaVu Sans');
+        $options->set('isFontSubsettingEnabled', true);
         $options->set('chroot', realpath(__DIR__ . '/../../public'));
 
         $dompdf = new Dompdf($options);
         $dompdf->loadHtml($html);
         $dompdf->setPaper($paperSize, $orientation);
         $dompdf->render();
+
+        // Footer page numbering: "Page X of Y"
+        $canvas = $dompdf->getCanvas();
+        $font = $dompdf->getFontMetrics()->getFont('DejaVu Sans', 'normal');
+        $canvas->page_text(270, 810, "Page {PAGE_NUM} of {PAGE_COUNT}", $font, 8, [0.4, 0.4, 0.4]);
 
         return $dompdf->output();
     }
@@ -53,6 +59,18 @@ class PdfService
         $html = View::render('payments.pdf', [
             'payment' => $payment,
             'allocations' => $allocations,
+            'business' => $business,
+            'customer' => $customer,
+        ], null);
+
+        return self::generatePdf($html);
+    }
+
+    public static function creditNotePdf(array $creditNote, array $items, array $business, array $customer): string
+    {
+        $html = View::render('credit-notes.pdf', [
+            'creditNote' => $creditNote,
+            'items' => $items,
             'business' => $business,
             'customer' => $customer,
         ], null);

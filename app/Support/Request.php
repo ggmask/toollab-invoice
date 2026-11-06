@@ -23,13 +23,31 @@ class Request
     private function determinePath(): string
     {
         $uri = parse_url($this->serverData['REQUEST_URI'] ?? '/', PHP_URL_PATH) ?: '/';
-        $scriptName = $this->serverData['SCRIPT_NAME'] ?? '';
-        $baseDir = dirname($scriptName);
 
-        // Normalize slashes
-        $baseDir = str_replace('\\', '/', $baseDir);
-        if ($baseDir !== '/' && str_starts_with($uri, $baseDir)) {
+        // 1. Strip configured base path (e.g. /toollab-invoice) if present
+        $appUrl = Config::get('app.url', '');
+        if (!empty($appUrl)) {
+            $configuredBasePath = rtrim(parse_url($appUrl, PHP_URL_PATH) ?? '', '/');
+            if ($configuredBasePath !== '' && str_starts_with($uri, $configuredBasePath)) {
+                $uri = substr($uri, strlen($configuredBasePath));
+            }
+        }
+
+        // 2. Also strip /public if still present in URI
+        if (str_starts_with($uri, '/public')) {
+            $uri = substr($uri, 7);
+        }
+
+        // 3. Fallback to script directory stripping
+        $scriptName = str_replace('\\', '/', $this->serverData['SCRIPT_NAME'] ?? '');
+        $baseDir = rtrim(dirname($scriptName), '/');
+        if ($baseDir !== '' && str_starts_with($uri, $baseDir)) {
             $uri = substr($uri, strlen($baseDir));
+        }
+
+        $parentBase = preg_replace('#/public$#', '', $baseDir);
+        if ($parentBase !== '' && str_starts_with($uri, $parentBase)) {
+            $uri = substr($uri, strlen($parentBase));
         }
 
         $uri = '/' . ltrim($uri, '/');
@@ -107,9 +125,18 @@ class Request
 
     public function baseUrl(): string
     {
+        $configured = Config::get('app.url', '');
+        if (!empty($configured)) {
+            return rtrim($configured, '/');
+        }
+
         $scriptName = $this->serverData['SCRIPT_NAME'] ?? '';
         $baseDir = rtrim(str_replace('\\', '/', dirname($scriptName)), '/');
-        $protocol = (!empty($this->serverData['HTTPS']) && $this->serverData['HTTPS'] !== 'off') ? 'https://' : 'http://';
+        $baseDir = preg_replace('#/public$#', '', $baseDir);
+        $isHttps = (!empty($this->serverData['HTTPS']) && $this->serverData['HTTPS'] !== 'off') ||
+                   (isset($this->serverData['HTTP_X_FORWARDED_PROTO']) && $this->serverData['HTTP_X_FORWARDED_PROTO'] === 'https') ||
+                   (isset($this->serverData['SERVER_PORT']) && (int)$this->serverData['SERVER_PORT'] === 443);
+        $protocol = $isHttps ? 'https://' : 'http://';
         $host = $this->serverData['HTTP_HOST'] ?? 'localhost';
         return $protocol . $host . $baseDir;
     }

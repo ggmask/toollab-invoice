@@ -9,6 +9,9 @@ if (!function_exists('url')) {
     function url(string $path = ''): string
     {
         $base = rtrim(Config::get('app.url', ''), '/');
+        if (empty($base) && isset($_SERVER['HTTP_HOST'])) {
+            $base = (new \App\Support\Request())->baseUrl();
+        }
         $path = ltrim($path, '/');
         return $path === '' ? $base : $base . '/' . $path;
     }

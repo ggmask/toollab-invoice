@@ -64,7 +64,7 @@ class NumberToWords
         $parts = [];
 
         if ($crores > 0) {
-            $parts[] = self::convertTwoDigits($crores) . ' Crore';
+            $parts[] = self::convertIndianWholeNumber($crores) . ' Crore';
         }
         if ($lakhs > 0) {
             $parts[] = self::convertTwoDigits($lakhs) . ' Lakh';

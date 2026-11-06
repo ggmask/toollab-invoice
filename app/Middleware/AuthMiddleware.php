@@ -37,8 +37,10 @@ class AuthMiddleware
             if ($business) {
                 Session::set('business', $business);
             } else {
-                Session::flash('error', 'No business workspace found for your account.');
-                return Response::redirect(url('/settings/business'));
+                Session::remove('user');
+                Session::remove('business');
+                Session::flash('error', 'No active business workspace found for your account. Please log in again or contact your administrator.');
+                return Response::redirect(url('/login'));
             }
         }
 
